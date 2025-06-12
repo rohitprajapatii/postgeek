@@ -14,24 +14,37 @@ class DatabaseMetricsChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Extract data
-    final totalCalls = double.tryParse(queryStats['total_calls']?.toString() ?? '0') ?? 0;
-    final totalExecTime = double.tryParse(queryStats['total_exec_time_ms']?.toString() ?? '0') ?? 0;
-    final avgQueryTime = double.tryParse(queryStats['avg_query_time_ms']?.toString() ?? '0') ?? 0;
-    final totalRows = double.tryParse(queryStats['total_rows']?.toString() ?? '0') ?? 0;
-    final cacheHitRatio = double.tryParse(queryStats['cache_hit_ratio']?.toString() ?? '0') ?? 0;
-    
+    final totalCalls =
+        double.tryParse(queryStats['total_calls']?.toString() ?? '0') ?? 0;
+    final totalExecTime =
+        double.tryParse(queryStats['total_exec_time_ms']?.toString() ?? '0') ??
+            0;
+    final avgQueryTime =
+        double.tryParse(queryStats['avg_query_time_ms']?.toString() ?? '0') ??
+            0;
+    final totalRows =
+        double.tryParse(queryStats['total_rows']?.toString() ?? '0') ?? 0;
+    final cacheHitRatio =
+        double.tryParse(queryStats['cache_hit_ratio']?.toString() ?? '0') ?? 0;
+
     // For demo purposes, we'll create some sample data points for a time series
     // In a real app, you'd fetch historical data from your backend
     final List<FlSpot> queryTimeSpots = List.generate(
       10,
-      (index) => FlSpot(index.toDouble(), avgQueryTime * (0.5 + index / 10)),
+      (index) => FlSpot(
+          index.toDouble(),
+          avgQueryTime > 0
+              ? avgQueryTime * (0.5 + index / 10)
+              : (index + 1)
+                  .toDouble() // Generate some demo data when avgQueryTime is 0
+          ),
     );
-    
+
     return Column(
       children: [
         // Tab selector for different charts (for future expansion)
         const SizedBox(height: 16),
-        
+
         // Main chart
         Expanded(
           child: LineChart(
@@ -84,7 +97,7 @@ class DatabaseMetricsChart extends StatelessWidget {
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
-                    interval: avgQueryTime / 2,
+                    interval: avgQueryTime > 0 ? avgQueryTime / 2 : 1,
                     getTitlesWidget: (value, meta) {
                       return SideTitleWidget(
                         axisSide: meta.axisSide,
@@ -108,7 +121,7 @@ class DatabaseMetricsChart extends StatelessWidget {
               minX: 0,
               maxX: 9,
               minY: 0,
-              maxY: avgQueryTime * 1.5,
+              maxY: avgQueryTime > 0 ? avgQueryTime * 1.5 : 10,
               lineBarsData: [
                 LineChartBarData(
                   spots: queryTimeSpots,
@@ -140,7 +153,7 @@ class DatabaseMetricsChart extends StatelessWidget {
             ),
           ),
         ),
-        
+
         // Chart legend and metrics
         Padding(
           padding: const EdgeInsets.only(top: 16),

@@ -18,15 +18,16 @@ class ConnectionForm extends StatefulWidget {
 
 class _ConnectionFormState extends State<ConnectionForm> {
   final _formKey = GlobalKey<FormState>();
-  
-  final _apiUrlController = TextEditingController(text: 'http://localhost:3000');
+
+  final _apiUrlController =
+      TextEditingController(text: 'http://localhost:3000');
   final _hostController = TextEditingController(text: 'localhost');
   final _portController = TextEditingController(text: '5432');
   final _databaseController = TextEditingController();
   final _usernameController = TextEditingController(text: 'postgres');
   final _passwordController = TextEditingController();
   final _connectionStringController = TextEditingController();
-  
+
   bool _useConnectionString = false;
 
   @override
@@ -69,12 +70,14 @@ class _ConnectionFormState extends State<ConnectionForm> {
             },
           ),
           const SizedBox(height: 24),
-          
+
           // Connection Method Toggle
-          Row(
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 8.0,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Text('Connection Method:'),
-              const SizedBox(width: 16),
+              const Text('Method:'),
               ChoiceChip(
                 label: const Text('Connection Details'),
                 selected: !_useConnectionString,
@@ -86,12 +89,11 @@ class _ConnectionFormState extends State<ConnectionForm> {
                 backgroundColor: AppColors.chipBackground,
                 selectedColor: AppColors.primary.withOpacity(0.2),
                 labelStyle: TextStyle(
-                  color: !_useConnectionString 
-                      ? AppColors.primary 
+                  color: !_useConnectionString
+                      ? AppColors.primary
                       : AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(width: 8),
               ChoiceChip(
                 label: const Text('Connection String'),
                 selected: _useConnectionString,
@@ -103,22 +105,23 @@ class _ConnectionFormState extends State<ConnectionForm> {
                 backgroundColor: AppColors.chipBackground,
                 selectedColor: AppColors.primary.withOpacity(0.2),
                 labelStyle: TextStyle(
-                  color: _useConnectionString 
-                      ? AppColors.primary 
+                  color: _useConnectionString
+                      ? AppColors.primary
                       : AppColors.textPrimary,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          
+
           // Connection Fields
           if (_useConnectionString)
             TextFormField(
               controller: _connectionStringController,
               decoration: const InputDecoration(
                 labelText: 'Connection String',
-                hintText: 'postgresql://username:password@localhost:5432/database',
+                hintText:
+                    'postgresql://username:password@localhost:5432/database',
                 prefixIcon: Icon(Icons.code),
               ),
               validator: (value) {
@@ -219,16 +222,16 @@ class _ConnectionFormState extends State<ConnectionForm> {
                 ),
               ],
             ),
-          
+
           const SizedBox(height: 32),
-          
+
           // Connect Button
           SizedBox(
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: widget.isConnecting 
-                  ? null 
+              onPressed: widget.isConnecting
+                  ? null
                   : () {
                       if (_formKey.currentState!.validate()) {
                         _connect();
@@ -253,7 +256,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
 
   void _connect() {
     final apiUrl = _apiUrlController.text.trim();
-    
+
     if (_useConnectionString) {
       context.read<ConnectionBloc>().add(
             ConnectRequested(
@@ -263,7 +266,7 @@ class _ConnectionFormState extends State<ConnectionForm> {
           );
     } else {
       final port = int.tryParse(_portController.text.trim());
-      
+
       context.read<ConnectionBloc>().add(
             ConnectRequested(
               apiUrl: apiUrl,

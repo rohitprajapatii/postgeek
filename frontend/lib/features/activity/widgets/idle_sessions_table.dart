@@ -52,7 +52,8 @@ class IdleSessionsTable extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: DataTable(
                 columnSpacing: 16,
-                headingRowColor: WidgetStateProperty.all(AppColors.chipBackground),
+                headingRowColor:
+                    WidgetStateProperty.all(AppColors.chipBackground),
                 columns: const [
                   DataColumn(label: Text('PID')),
                   DataColumn(label: Text('User')),
@@ -69,13 +70,16 @@ class IdleSessionsTable extends StatelessWidget {
                   final clientAddress = session['client_address'] ?? 'N/A';
                   final idleDuration = session['idle_duration_seconds'] ?? 0;
                   final query = session['query'] ?? 'N/A';
-                  
-                  // Calculate idle duration text
+
+                  // Calculate idle duration text - safely parse the duration
+                  final idleDurationSeconds =
+                      double.tryParse(idleDuration.toString()) ?? 0;
                   final idleStart = DateTime.now().subtract(
-                    Duration(seconds: idleDuration.toInt()),
+                    Duration(seconds: idleDurationSeconds.toInt()),
                   );
-                  final idleText = timeago.format(idleStart, allowFromNow: true);
-                  
+                  final idleText =
+                      timeago.format(idleStart, allowFromNow: true);
+
                   return DataRow(
                     cells: [
                       DataCell(Text(pid.toString())),
@@ -95,7 +99,8 @@ class IdleSessionsTable extends StatelessWidget {
                       ),
                       DataCell(
                         IconButton(
-                          icon: const Icon(Icons.close, color: AppColors.error, size: 20),
+                          icon: const Icon(Icons.close,
+                              color: AppColors.error, size: 20),
                           tooltip: 'Terminate Session',
                           onPressed: () => onTerminate(pid),
                         ),

@@ -33,8 +33,10 @@ class LocksTable extends StatelessWidget {
     }
 
     // Group locks by granted status
-    final grantedLocks = locks.where((lock) => lock['granted'] == true).toList();
-    final pendingLocks = locks.where((lock) => lock['granted'] != true).toList();
+    final grantedLocks =
+        locks.where((lock) => lock['granted'] == true).toList();
+    final pendingLocks =
+        locks.where((lock) => lock['granted'] != true).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -44,20 +46,20 @@ class LocksTable extends StatelessWidget {
           // Pending Locks (more important to show first)
           if (pendingLocks.isNotEmpty) ...[
             _buildLocksTable(
-              context, 
-              pendingLocks, 
-              'Pending Locks', 
+              context,
+              pendingLocks,
+              'Pending Locks',
               AppColors.warning,
             ),
             const SizedBox(height: 24),
           ],
-          
+
           // Granted Locks
           if (grantedLocks.isNotEmpty)
             _buildLocksTable(
-              context, 
-              grantedLocks, 
-              'Granted Locks', 
+              context,
+              grantedLocks,
+              'Granted Locks',
               AppColors.success,
             ),
         ],
@@ -66,8 +68,8 @@ class LocksTable extends StatelessWidget {
   }
 
   Widget _buildLocksTable(
-    BuildContext context, 
-    List<dynamic> locksList, 
+    BuildContext context,
+    List<dynamic> locksList,
     String title,
     Color titleColor,
   ) {
@@ -80,7 +82,10 @@ class LocksTable extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  locksList == locks.where((lock) => lock['granted'] != true).toList()
+                  locksList ==
+                          locks
+                              .where((lock) => lock['granted'] != true)
+                              .toList()
                       ? Icons.lock
                       : Icons.lock_open,
                   color: titleColor,
@@ -100,7 +105,8 @@ class LocksTable extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: DataTable(
               columnSpacing: 16,
-              headingRowColor: WidgetStateProperty.all(AppColors.chipBackground),
+              headingRowColor:
+                  WidgetStateProperty.all(AppColors.chipBackground),
               columns: const [
                 DataColumn(label: Text('PID')),
                 DataColumn(label: Text('Lock Type')),
@@ -120,7 +126,11 @@ class LocksTable extends StatelessWidget {
                 final applicationName = lock['application_name'] ?? 'N/A';
                 final queryDuration = lock['query_duration_seconds'] ?? 0;
                 final query = lock['query'] ?? 'N/A';
-                
+
+                // Safely parse the query duration
+                final queryDurationSeconds =
+                    double.tryParse(queryDuration.toString()) ?? 0.0;
+
                 return DataRow(
                   cells: [
                     DataCell(Text(pid.toString())),
@@ -129,7 +139,8 @@ class LocksTable extends StatelessWidget {
                     DataCell(Text(relationName.toString())),
                     DataCell(Text(username.toString())),
                     DataCell(Text(applicationName.toString())),
-                    DataCell(Text('${queryDuration.toStringAsFixed(1)}s')),
+                    DataCell(
+                        Text('${queryDurationSeconds.toStringAsFixed(1)}s')),
                     DataCell(
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 300),

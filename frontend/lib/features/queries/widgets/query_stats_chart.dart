@@ -14,12 +14,19 @@ class QueryStatsChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Extract data
-    final totalCalls = double.tryParse(queryStats['total_calls']?.toString() ?? '0') ?? 0;
-    final totalExecTime = double.tryParse(queryStats['total_exec_time_ms']?.toString() ?? '0') ?? 0;
-    final avgQueryTime = double.tryParse(queryStats['avg_query_time_ms']?.toString() ?? '0') ?? 0;
-    final totalRows = double.tryParse(queryStats['total_rows']?.toString() ?? '0') ?? 0;
-    final cacheHitRatio = double.tryParse(queryStats['cache_hit_ratio']?.toString() ?? '0') ?? 0;
-    
+    final totalCalls =
+        double.tryParse(queryStats['total_calls']?.toString() ?? '0') ?? 0;
+    final totalExecTime =
+        double.tryParse(queryStats['total_exec_time_ms']?.toString() ?? '0') ??
+            0;
+    final avgQueryTime =
+        double.tryParse(queryStats['avg_query_time_ms']?.toString() ?? '0') ??
+            0;
+    final totalRows =
+        double.tryParse(queryStats['total_rows']?.toString() ?? '0') ?? 0;
+    final cacheHitRatio =
+        double.tryParse(queryStats['cache_hit_ratio']?.toString() ?? '0') ?? 0;
+
     // Create some demo data points for a bar chart
     // In a real app, this would come from historical data
     final List<BarChartGroupData> barGroups = [
@@ -29,11 +36,15 @@ class QueryStatsChart extends StatelessWidget {
       _makeGroupData(3, totalRows / 1000, 'Rows (K)'),
       _makeGroupData(4, cacheHitRatio, 'Cache Hit %'),
     ];
-    
+
+    // Calculate maxY once to avoid multiple calls
+    final maxY = _getMaxY(barGroups);
+    final double horizontalInterval = maxY > 0 ? maxY / 5 : 1.0;
+
     return BarChart(
       BarChartData(
         alignment: BarChartAlignment.spaceAround,
-        maxY: _getMaxY(barGroups),
+        maxY: maxY,
         barTouchData: BarTouchData(
           touchTooltipData: BarTouchTooltipData(
             tooltipBgColor: AppColors.tooltipBackground,
@@ -100,7 +111,7 @@ class QueryStatsChart extends StatelessWidget {
                   default:
                     text = '';
                 }
-                
+
                 return SideTitleWidget(
                   axisSide: meta.axisSide,
                   child: Text(
@@ -127,7 +138,7 @@ class QueryStatsChart extends StatelessWidget {
         ),
         gridData: FlGridData(
           show: true,
-          horizontalInterval: _getMaxY(barGroups) / 5,
+          horizontalInterval: horizontalInterval,
           getDrawingHorizontalLine: (value) {
             return const FlLine(
               color: AppColors.divider,
@@ -161,7 +172,7 @@ class QueryStatsChart extends StatelessWidget {
       default:
         color = AppColors.primary;
     }
-    
+
     return BarChartGroupData(
       x: x,
       barRods: [
@@ -186,6 +197,10 @@ class QueryStatsChart extends StatelessWidget {
           maxY = rod.toY;
         }
       }
+    }
+    // Ensure maxY is never 0 to prevent chart rendering issues
+    if (maxY == 0) {
+      return 10; // Default value when no data
     }
     return maxY * 1.2; // Add 20% padding
   }

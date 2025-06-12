@@ -42,7 +42,8 @@ class ActivityOverviewCard extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: DataTable(
               columnSpacing: 16,
-              headingRowColor: WidgetStateProperty.all(AppColors.chipBackground),
+              headingRowColor:
+                  WidgetStateProperty.all(AppColors.chipBackground),
               columns: const [
                 DataColumn(label: Text('PID')),
                 DataColumn(label: Text('User')),
@@ -57,14 +58,16 @@ class ActivityOverviewCard extends StatelessWidget {
                 final application = activity['application_name'] ?? 'N/A';
                 final state = activity['state'] ?? 'N/A';
                 final durationSeconds = activity['query_duration_seconds'] ?? 0;
+                final durationSecondsInt = _safeParseDuration(durationSeconds);
                 final query = activity['query'] ?? 'N/A';
-                
+
                 // Calculate duration ago text
                 final queryStart = DateTime.now().subtract(
-                  Duration(seconds: durationSeconds.toInt()),
+                  Duration(seconds: durationSecondsInt),
                 );
-                final durationText = timeago.format(queryStart, allowFromNow: true);
-                
+                final durationText =
+                    timeago.format(queryStart, allowFromNow: true);
+
                 return DataRow(
                   cells: [
                     DataCell(Text(pid.toString())),
@@ -102,7 +105,7 @@ class ActivityOverviewCard extends StatelessWidget {
 
   Widget _buildStateChip(String state) {
     Color color;
-    
+
     switch (state.toLowerCase()) {
       case 'active':
         color = AppColors.success;
@@ -119,7 +122,7 @@ class ActivityOverviewCard extends StatelessWidget {
       default:
         color = AppColors.textSecondary;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -134,5 +137,29 @@ class ActivityOverviewCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  int _safeParseDuration(dynamic duration) {
+    if (duration == null) {
+      return 0;
+    }
+
+    if (duration is int) {
+      return duration.abs(); // Use absolute value to handle negative durations
+    }
+
+    if (duration is double) {
+      return duration.abs().round();
+    }
+
+    if (duration is String) {
+      final parsed = double.tryParse(duration);
+      if (parsed != null) {
+        return parsed.abs().round();
+      }
+      return 0;
+    }
+
+    return 0;
   }
 }

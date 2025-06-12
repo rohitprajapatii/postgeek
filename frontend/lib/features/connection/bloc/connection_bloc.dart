@@ -26,6 +26,11 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
       // Set the API service base URL
       apiService.setBaseUrl(event.apiUrl);
 
+      print('[ConnectionBloc] Attempting to connect to database...');
+      print('[ConnectionBloc] API URL: ${event.apiUrl}');
+      print(
+          '[ConnectionBloc] Request data: ${event.connectionString != null ? 'connection string provided' : 'individual fields provided'}');
+
       // Try to connect to the database
       final response = await apiService.post(
         '/api/database/connect',
@@ -42,13 +47,23 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
         },
       );
 
-      if (response.statusCode == 200) {
+      print(
+          '[ConnectionBloc] Response received - Status Code: ${response.statusCode}');
+      print('[ConnectionBloc] Response data: ${response.data}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print('[ConnectionBloc] ✅ Connection successful');
+
         // Create connection info object
         final connectionInfo = ConnectionInfo(
-          host: event.host ?? 'Unknown host',
-          port: event.port ?? 5432,
-          database: event.database ?? 'Unknown database',
-          username: event.username ?? 'Unknown user',
+          host: event.host ?? 'localhost',
+          port: event.port is int
+              ? event.port!
+              : (event.port != null
+                  ? int.tryParse(event.port.toString()) ?? 5432
+                  : 5432),
+          database: event.database ?? 'postgres',
+          username: event.username ?? 'postgres',
           connectionString: event.connectionString,
         );
 
@@ -58,12 +73,15 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
           errorMessage: null,
         ));
       } else {
+        print(
+            '[ConnectionBloc] ❌ Connection failed - Status Code: ${response.statusCode}');
         emit(state.copyWith(
           status: ConnectionStatus.error,
           errorMessage: 'Failed to connect to database',
         ));
       }
     } catch (e) {
+      print('[ConnectionBloc] ❌ Exception during connection: $e');
       emit(state.copyWith(
         status: ConnectionStatus.error,
         errorMessage: e.toString(),

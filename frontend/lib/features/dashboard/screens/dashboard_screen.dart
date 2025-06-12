@@ -36,7 +36,7 @@ class DashboardScreen extends StatelessWidget {
                   const SizedBox(width: 16),
                 ],
               ),
-              
+
               // Last Updated Info
               if (state.dashboardData != null)
                 SliverToBoxAdapter(
@@ -49,9 +49,10 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              
+
               // Loading Indicator
-              if (state.status == DashboardStatus.loading && state.dashboardData == null)
+              if (state.status == DashboardStatus.loading &&
+                  state.dashboardData == null)
                 const SliverFillRemaining(
                   child: Center(
                     child: CircularProgressIndicator(),
@@ -82,7 +83,9 @@ class DashboardScreen extends StatelessWidget {
                         const SizedBox(height: 24),
                         ElevatedButton(
                           onPressed: () {
-                            context.read<DashboardBloc>().add(LoadDashboardData());
+                            context
+                                .read<DashboardBloc>()
+                                .add(LoadDashboardData());
                           },
                           child: const Text('Retry'),
                         ),
@@ -107,32 +110,39 @@ class DashboardScreen extends StatelessWidget {
                         children: [
                           SummaryCard(
                             title: 'Database Size',
-                            value: state.dashboardData!.databaseOverview['size'] ?? 'Unknown',
+                            value:
+                                state.dashboardData!.databaseOverview['size'] ??
+                                    'Unknown',
                             icon: Icons.storage,
                             color: AppColors.primary,
                           ),
                           SummaryCard(
                             title: 'Cache Hit Ratio',
-                            value: '${state.dashboardData!.databaseOverview['cache_hit_ratio']?.toStringAsFixed(2) ?? 'Unknown'}%',
+                            value:
+                                '${_formatNumber(state.dashboardData!.databaseOverview['cache_hit_ratio'])}%',
                             icon: Icons.memory,
                             color: AppColors.secondary,
                           ),
                           SummaryCard(
                             title: 'Active Sessions',
-                            value: state.dashboardData!.activeSessions.length.toString(),
+                            value: state.dashboardData!.activeSessions.length
+                                .toString(),
                             icon: Icons.people,
                             color: AppColors.info,
                           ),
                           SummaryCard(
                             title: 'Deadlocks',
-                            value: state.dashboardData!.healthOverview['deadlocks']?['deadlocks']?.toString() ?? '0',
+                            value: state.dashboardData!
+                                    .healthOverview['deadlocks']?['deadlocks']
+                                    ?.toString() ??
+                                '0',
                             icon: Icons.lock,
                             color: AppColors.warning,
                           ),
                         ],
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Charts Section
                       Text(
                         'Database Metrics',
@@ -146,7 +156,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Health Status
                       Text(
                         'Health Status',
@@ -157,7 +167,7 @@ class DashboardScreen extends StatelessWidget {
                         healthData: state.dashboardData!.healthOverview,
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Slow Queries
                       Text(
                         'Slow Queries',
@@ -168,7 +178,7 @@ class DashboardScreen extends StatelessWidget {
                         queries: state.dashboardData!.slowQueries,
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Activity Overview
                       Text(
                         'Activity Overview',
@@ -195,5 +205,25 @@ class DashboardScreen extends StatelessWidget {
     if (width < 900) return 2;
     if (width < 1200) return 3;
     return 4;
+  }
+
+  String _formatNumber(dynamic value) {
+    if (value == null) {
+      return 'Unknown';
+    }
+
+    if (value is num) {
+      return value.toStringAsFixed(2);
+    }
+
+    if (value is String) {
+      final number = double.tryParse(value);
+      if (number != null) {
+        return number.toStringAsFixed(2);
+      }
+      return value;
+    }
+
+    return value.toString();
   }
 }

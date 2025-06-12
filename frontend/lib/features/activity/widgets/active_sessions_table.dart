@@ -57,13 +57,14 @@ class ActiveSessionsTable extends StatelessWidget {
     final query = session['query'] ?? 'N/A';
     final waitEventType = session['wait_event_type'] ?? 'N/A';
     final waitEvent = session['wait_event'] ?? 'N/A';
-    
+
     // Calculate duration ago text
+    final queryDurationInt = _safeParseDuration(queryDuration);
     final queryStart = DateTime.now().subtract(
-      Duration(seconds: queryDuration.toInt()),
+      Duration(seconds: queryDurationInt),
     );
     final durationText = timeago.format(queryStart, allowFromNow: true);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -78,14 +79,15 @@ class ActiveSessionsTable extends StatelessWidget {
                 _buildStateChip(state),
               ],
             ),
-            subtitle: Text('User: $username, App: $applicationName, Client: $clientAddress'),
+            subtitle: Text(
+                'User: $username, App: $applicationName, Client: $clientAddress'),
             trailing: IconButton(
               icon: const Icon(Icons.close, color: AppColors.error),
               tooltip: 'Terminate Session',
               onPressed: () => onTerminate(pid),
             ),
           ),
-          
+
           // Query section
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -101,7 +103,10 @@ class ActiveSessionsTable extends StatelessWidget {
                         children: [
                           Text(
                             'Running for: $durationText',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
                                   color: _getDurationColor(queryDuration),
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -117,7 +122,7 @@ class ActiveSessionsTable extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                
+
                 // SQL query display
                 Container(
                   decoration: BoxDecoration(
@@ -149,7 +154,7 @@ class ActiveSessionsTable extends StatelessWidget {
 
   Widget _buildStateChip(String state) {
     Color color;
-    
+
     switch (state.toLowerCase()) {
       case 'active':
         color = AppColors.success;
@@ -166,7 +171,7 @@ class ActiveSessionsTable extends StatelessWidget {
       default:
         color = AppColors.textSecondary;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -204,5 +209,29 @@ class ActiveSessionsTable extends StatelessWidget {
         .replaceAll(' GROUP BY ', '\nGROUP BY ')
         .replaceAll(' ORDER BY ', '\nORDER BY ')
         .replaceAll(' LIMIT ', '\nLIMIT ');
+  }
+
+  int _safeParseDuration(dynamic duration) {
+    if (duration == null) {
+      return 0;
+    }
+
+    if (duration is int) {
+      return duration.abs();
+    }
+
+    if (duration is double) {
+      return duration.abs().round();
+    }
+
+    if (duration is String) {
+      final parsed = double.tryParse(duration);
+      if (parsed != null) {
+        return parsed.abs().round();
+      }
+      return 0;
+    }
+
+    return 0;
   }
 }

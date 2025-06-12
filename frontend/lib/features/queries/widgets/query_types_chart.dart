@@ -13,37 +13,108 @@ class QueryTypesChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Check if queryTypes is empty
+    if (queryTypes.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.pie_chart_outline,
+              size: 64,
+              color: AppColors.textSecondary,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No query data available',
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Execute some queries to see the distribution',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     // Create pie chart sections
     final sections = <PieChartSectionData>[];
-    
+
     // Calculate total calls for percentage
     double totalCalls = 0;
     for (final type in queryTypes) {
-      totalCalls += double.tryParse(type['total_calls']?.toString() ?? '0') ?? 0;
+      totalCalls +=
+          double.tryParse(type['total_calls']?.toString() ?? '0') ?? 0;
     }
-    
+
+    // Additional safety check - if totalCalls is 0, show the empty state
+    if (totalCalls == 0) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.pie_chart_outline,
+              size: 64,
+              color: AppColors.textSecondary,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No query data available',
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Execute some queries to see the distribution',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     // Create sections
     for (int i = 0; i < queryTypes.length; i++) {
       final type = queryTypes[i];
       final queryType = type['query_type'] ?? 'Unknown';
-      final calls = double.tryParse(type['total_calls']?.toString() ?? '0') ?? 0;
+      final calls =
+          double.tryParse(type['total_calls']?.toString() ?? '0') ?? 0;
       final percentage = totalCalls > 0 ? (calls / totalCalls) * 100 : 0;
-      
-      sections.add(
-        PieChartSectionData(
-          value: calls,
-          title: '$queryType\n${percentage.toStringAsFixed(1)}%',
-          radius: 100,
-          titleStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+
+      // Only add sections with actual data
+      if (calls > 0) {
+        sections.add(
+          PieChartSectionData(
+            value: calls,
+            title: '$queryType\n${percentage.toStringAsFixed(1)}%',
+            radius: 100,
+            titleStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+            color: _getColorForQueryType(queryType),
           ),
-          color: _getColorForQueryType(queryType),
-        ),
-      );
+        );
+      }
     }
-    
+
     return Row(
       children: [
         // Pie Chart
@@ -60,7 +131,7 @@ class QueryTypesChart extends StatelessWidget {
             ),
           ),
         ),
-        
+
         // Legend
         Expanded(
           flex: 2,
@@ -77,9 +148,13 @@ class QueryTypesChart extends StatelessWidget {
               const SizedBox(height: 16),
               ...queryTypes.map((type) {
                 final queryType = type['query_type'] ?? 'Unknown';
-                final calls = double.tryParse(type['total_calls']?.toString() ?? '0') ?? 0;
-                final totalTime = double.tryParse(type['total_time_ms']?.toString() ?? '0') ?? 0;
-                
+                final calls =
+                    double.tryParse(type['total_calls']?.toString() ?? '0') ??
+                        0;
+                final totalTime =
+                    double.tryParse(type['total_time_ms']?.toString() ?? '0') ??
+                        0;
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
