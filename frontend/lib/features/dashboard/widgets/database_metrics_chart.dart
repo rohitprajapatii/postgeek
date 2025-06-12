@@ -40,13 +40,13 @@ class DatabaseMetricsChart extends StatelessWidget {
                 show: true,
                 drawVerticalLine: true,
                 getDrawingHorizontalLine: (value) {
-                  return FlLine(
+                  return const FlLine(
                     color: AppColors.divider,
                     strokeWidth: 1,
                   );
                 },
                 getDrawingVerticalLine: (value) {
-                  return FlLine(
+                  return const FlLine(
                     color: AppColors.divider,
                     strokeWidth: 1,
                   );

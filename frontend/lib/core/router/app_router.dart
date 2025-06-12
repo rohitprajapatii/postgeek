@@ -19,31 +19,31 @@ class AppRouter {
         routes: [
           GoRoute(
             path: '/',
-            pageBuilder: (context, state) => NoTransitionPage(
+            pageBuilder: (context, state) => const NoTransitionPage(
               child: ConnectionScreen(),
             ),
           ),
           GoRoute(
             path: '/dashboard',
-            pageBuilder: (context, state) => NoTransitionPage(
+            pageBuilder: (context, state) => const NoTransitionPage(
               child: DashboardScreen(),
             ),
           ),
           GoRoute(
             path: '/queries',
-            pageBuilder: (context, state) => NoTransitionPage(
+            pageBuilder: (context, state) => const NoTransitionPage(
               child: QueriesScreen(),
             ),
           ),
           GoRoute(
             path: '/activity',
-            pageBuilder: (context, state) => NoTransitionPage(
+            pageBuilder: (context, state) => const NoTransitionPage(
               child: ActivityScreen(),
             ),
           ),
           GoRoute(
             path: '/health',
-            pageBuilder: (context, state) => NoTransitionPage(
+            pageBuilder: (context, state) => const NoTransitionPage(
               child: HealthScreen(),
             ),
           ),

@@ -129,7 +129,7 @@ class QueryStatsChart extends StatelessWidget {
           show: true,
           horizontalInterval: _getMaxY(barGroups) / 5,
           getDrawingHorizontalLine: (value) {
-            return FlLine(
+            return const FlLine(
               color: AppColors.divider,
               strokeWidth: 1,
             );

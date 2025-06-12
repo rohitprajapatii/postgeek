@@ -113,7 +113,7 @@ class QueryTypesChart extends StatelessWidget {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
             ],
           ),
         ),

@@ -105,7 +105,7 @@ class BlockedQueriesTable extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.error.withOpacity(0.1),
-              border: Border(
+              border: const Border(
                 left: BorderSide(
                   color: AppColors.error,
                   width: 4,
@@ -175,7 +175,7 @@ class BlockedQueriesTable extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.warning.withOpacity(0.1),
-              border: Border(
+              border: const Border(
                 left: BorderSide(
                   color: AppColors.warning,
                   width: 4,

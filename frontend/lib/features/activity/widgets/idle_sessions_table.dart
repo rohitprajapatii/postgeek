@@ -52,7 +52,7 @@ class IdleSessionsTable extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: DataTable(
                 columnSpacing: 16,
-                headingRowColor: MaterialStateProperty.all(AppColors.chipBackground),
+                headingRowColor: WidgetStateProperty.all(AppColors.chipBackground),
                 columns: const [
                   DataColumn(label: Text('PID')),
                   DataColumn(label: Text('User')),

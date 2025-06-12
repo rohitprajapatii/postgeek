@@ -75,7 +75,7 @@ class MissingIndexesCard extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: DataTable(
               columnSpacing: 16,
-              headingRowColor: MaterialStateProperty.all(AppColors.chipBackground),
+              headingRowColor: WidgetStateProperty.all(AppColors.chipBackground),
               columns: const [
                 DataColumn(label: Text('Table')),
                 DataColumn(label: Text('Sequential Scans')),

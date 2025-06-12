@@ -30,16 +30,40 @@ RUN flutter channel stable
 RUN flutter upgrade
 RUN flutter config --enable-web
 
-# Fix git ownership issue for Flutter directory
-RUN git config --global --add safe.directory /flutter
+# Change ownership of Flutter directory to nobody:nogroup
+RUN chown -R nobody:nogroup /flutter
 
 WORKDIR /app/frontend
 
-# Copy frontend files and build
-COPY frontend/ ./
+# Copy pubspec files first for better caching
+COPY frontend/pubspec.yaml frontend/pubspec.lock ./
 RUN chown -R nobody:nogroup /app/frontend
+
+# Create home directory for nobody user
+RUN mkdir -p /home/nobody && chown nobody:nogroup /home/nobody
+ENV HOME=/home/nobody
+
 USER nobody
+
+# Configure git for the nobody user
+RUN git config --global --add safe.directory /flutter
+
+# Install dependencies first
 RUN flutter pub get
+
+# Switch back to root to copy files and change ownership
+USER root
+
+# Copy the rest of the frontend files
+COPY frontend/ ./
+
+# Change ownership of all files to nobody
+RUN chown -R nobody:nogroup /app/frontend
+
+# Switch back to nobody user
+USER nobody
+
+# Build the web app
 RUN flutter build web --release
 
 # Backend production stage

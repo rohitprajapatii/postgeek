@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
@@ -19,26 +32,65 @@
   <title>PostGeek</title>
   <link rel="manifest" href="manifest.json">
 
+  <style>
+    /* Fallback styles */
+    body {
+      margin: 0;
+      padding: 0;
+      background: #0e1117;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    
+    .loading-text {
+      margin-top: 20px;
+      font-size: 16px;
+      opacity: 0.7;
+    }
+  </style>
   <script>
-    // The value below is injected by flutter build, do not touch.
-    const serviceWorkerVersion = null;
+      // The value below is injected by flutter build, do not touch.
+      const serviceWorkerVersion = "{{flutter_service_worker_version}}";
   </script>
   <!-- This script adds the flutter initialization JS code -->
   <script src="flutter.js" defer></script>
 </head>
 <body>
+  <!-- Loading indicator -->
+  <div id="loading" class="loading">
+    <div>Loading PostGeek...</div>
+    <div class="loading-text">Initializing PostgreSQL Monitoring Tool</div>
+  </div>
+
   <script>
     window.addEventListener('load', function(ev) {
+      // Set up Flutter build configuration
+      window._flutter = window._flutter || {};
+      window._flutter.buildConfig = {
+        builds: [
+          {
+            compileTarget: 'dart2js',
+            renderer: 'html',
+          }
+        ]
+      };
+      
       // Download main.dart.js
-      _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        },
-        onEntrypointLoaded: function(engineInitializer) {
-          engineInitializer.initializeEngine().then(function(appRunner) {
-            appRunner.runApp();
-          });
-        }
+      _flutter.loader.load({
+      }).then(function(engineInitializer) {
+        return engineInitializer.initializeEngine();
+      }).then(function(appRunner) {
+        // Remove loading indicator
+        document.getElementById('loading').remove();
+        return appRunner.runApp();
       });
     });
   </script>

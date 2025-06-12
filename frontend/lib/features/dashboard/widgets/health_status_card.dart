@@ -50,7 +50,7 @@ class HealthStatusCard extends StatelessWidget {
                 context: context,
                 title: 'Connection Usage',
                 status: '${connections['used']} of ${connections['max_conn']} (${connections['free']} free)',
-                isHealthy: int.tryParse(connections['free'].toString()) ?? 0 > 10,
+                isHealthy: (int.tryParse(connections['free'].toString()) ?? 0) > 10,
                 icon: Icons.people,
               ),
               const SizedBox(height: 16),

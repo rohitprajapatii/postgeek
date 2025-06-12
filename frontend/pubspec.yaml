@@ -30,10 +30,11 @@ dependencies:
   flutter_svg: ^2.0.9
   google_fonts: ^6.1.0
   fl_chart: ^0.65.0
-  syncfusion_flutter_charts: ^23.2.7
-  syncfusion_flutter_datagrid: ^23.2.7
   flutter_syntax_view: ^4.0.0
   flutter_highlight: ^0.7.0
+  # Syncfusion packages
+  syncfusion_flutter_charts: ^27.1.48
+  syncfusion_flutter_gauges: ^27.1.48
   # UI Responsiveness
   responsive_framework: ^1.1.1
 

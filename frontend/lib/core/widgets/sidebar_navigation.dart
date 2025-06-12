@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/connection/bloc/connection_bloc.dart';
+import '../../features/connection/bloc/connection_bloc.dart' as connection_bloc;
 import '../theme/app_colors.dart';
 
 class SidebarNavigation extends StatelessWidget {
@@ -25,7 +25,7 @@ class SidebarNavigation extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.data_usage,
                   color: AppColors.primary,
                   size: 32,
@@ -77,7 +77,7 @@ class SidebarNavigation extends StatelessWidget {
           // Connection Info
           Container(
             padding: const EdgeInsets.all(16),
-            child: BlocBuilder<ConnectionBloc, ConnectionState>(
+            child: BlocBuilder<connection_bloc.ConnectionBloc, connection_bloc.ConnectionState>(
               builder: (context, state) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,7 +119,7 @@ class SidebarNavigation extends StatelessWidget {
                         icon: const Icon(Icons.logout, size: 16),
                         label: const Text('Disconnect'),
                         onPressed: () {
-                          context.read<ConnectionBloc>().add(DisconnectRequested());
+                          context.read<connection_bloc.ConnectionBloc>().add(connection_bloc.DisconnectRequested());
                         },
                       ),
                     ),

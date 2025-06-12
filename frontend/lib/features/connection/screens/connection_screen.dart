@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../bloc/connection_bloc.dart';
+import '../bloc/connection_bloc.dart' as connection_bloc;
 import '../widgets/connection_form.dart';
 
 class ConnectionScreen extends StatelessWidget {
@@ -12,13 +12,13 @@ class ConnectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: BlocConsumer<ConnectionBloc, ConnectionState>(
+      body: BlocConsumer<connection_bloc.ConnectionBloc, connection_bloc.ConnectionState>(
         listener: (context, state) {
-          if (state.status == ConnectionStatus.connected) {
+          if (state.status == connection_bloc.ConnectionStatus.connected) {
             context.go('/dashboard');
           }
           
-          if (state.status == ConnectionStatus.error && state.errorMessage != null) {
+          if (state.status == connection_bloc.ConnectionStatus.error && state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.errorMessage!),
@@ -71,7 +71,7 @@ class ConnectionScreen extends StatelessWidget {
                   
                   // Connection Form
                   ConnectionForm(
-                    isConnecting: state.status == ConnectionStatus.connecting,
+                    isConnecting: state.status == connection_bloc.ConnectionStatus.connecting,
                   ),
                 ],
               ),

@@ -80,11 +80,11 @@ class QueriesBloc extends Bloc<QueriesEvent, QueriesState> {
     _refreshTimer?.cancel();
 
     // Load data immediately
-    add(LoadQueries());
+    add(const LoadQueries());
 
     // Set up a periodic timer to refresh data
     _refreshTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-      add(LoadQueries());
+      add(const LoadQueries());
     });
   }
 
@@ -102,7 +102,7 @@ class QueriesBloc extends Bloc<QueriesEvent, QueriesState> {
   ) async {
     try {
       await apiService.post('/api/queries/reset');
-      add(LoadQueries());
+      add(const LoadQueries());
     } catch (e) {
       emit(state.copyWith(
         errorMessage: 'Failed to reset query statistics: ${e.toString()}',

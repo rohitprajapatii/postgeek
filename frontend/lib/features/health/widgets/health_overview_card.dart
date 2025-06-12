@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:syncfusion_flutter_gauges/gauges.dart' as gauges;
 
 import '../../../core/theme/app_colors.dart';
 
@@ -41,7 +41,7 @@ class HealthOverviewCard extends StatelessWidget {
       final max = int.tryParse(connections['max_conn'].toString()) ?? 0;
       if (max > 0 && used / max > 0.8) {
         healthScore -= ((used / max) * 100 - 80).round();
-        healthIssues.add('High connection usage (${used}/${max})');
+        healthIssues.add('High connection usage ($used/$max)');
       }
     }
     
@@ -116,7 +116,7 @@ class HealthOverviewCard extends StatelessWidget {
                               ],
                             ),
                           );
-                        }).toList(),
+                        }),
                     ],
                   ),
                 ),
@@ -188,37 +188,37 @@ class HealthOverviewCard extends StatelessWidget {
   }
 
   Widget _buildHealthGauge(int score) {
-    return SfRadialGauge(
-      axes: <RadialAxis>[
-        RadialAxis(
+    return gauges.SfRadialGauge(
+      axes: <gauges.RadialAxis>[
+        gauges.RadialAxis(
           minimum: 0,
           maximum: 100,
           showLabels: false,
           showTicks: false,
-          axisLineStyle: const AxisLineStyle(
+          axisLineStyle: const gauges.AxisLineStyle(
             thickness: 0.1,
-            cornerStyle: CornerStyle.bothCurve,
+            cornerStyle: gauges.CornerStyle.bothCurve,
             color: AppColors.divider,
-            thicknessUnit: GaugeSizeUnit.factor,
+            thicknessUnit: gauges.GaugeSizeUnit.factor,
           ),
-          pointers: <GaugePointer>[
-            RangePointer(
+          pointers: <gauges.GaugePointer>[
+            gauges.RangePointer(
               value: score.toDouble(),
               width: 0.1,
-              sizeUnit: GaugeSizeUnit.factor,
-              cornerStyle: CornerStyle.bothCurve,
-              gradient: SweepGradient(
+              sizeUnit: gauges.GaugeSizeUnit.factor,
+              cornerStyle: gauges.CornerStyle.bothCurve,
+              gradient: const SweepGradient(
                 colors: <Color>[
                   AppColors.error,
                   AppColors.warning,
                   AppColors.success,
                 ],
-                stops: const <double>[0.0, 0.5, 1.0],
+                stops: <double>[0.0, 0.5, 1.0],
               ),
             ),
           ],
-          annotations: <GaugeAnnotation>[
-            GaugeAnnotation(
+          annotations: <gauges.GaugeAnnotation>[
+            gauges.GaugeAnnotation(
               widget: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[

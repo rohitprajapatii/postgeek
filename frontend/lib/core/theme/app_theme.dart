@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
@@ -26,60 +25,70 @@ class AppTheme {
       foregroundColor: AppColors.textPrimary,
       elevation: 0,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: AppColors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
     ),
-    textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
-      displayLarge: GoogleFonts.inter(
+    textTheme: const TextTheme(
+      displayLarge: TextStyle(
         fontSize: 32,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
-      displayMedium: GoogleFonts.inter(
+      displayMedium: TextStyle(
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
-      displaySmall: GoogleFonts.inter(
+      displaySmall: TextStyle(
         fontSize: 24,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
-      headlineMedium: GoogleFonts.inter(
+      headlineMedium: TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
-      headlineSmall: GoogleFonts.inter(
+      headlineSmall: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
-      titleLarge: GoogleFonts.inter(
+      titleLarge: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
-      titleMedium: GoogleFonts.inter(
+      titleMedium: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
-      bodyLarge: GoogleFonts.inter(
+      bodyLarge: TextStyle(
         fontSize: 16,
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
-      bodyMedium: GoogleFonts.inter(
+      bodyMedium: TextStyle(
         fontSize: 14,
         color: AppColors.textSecondary,
+        fontFamily: 'Inter',
       ),
-      bodySmall: GoogleFonts.inter(
+      bodySmall: TextStyle(
         fontSize: 12,
         color: AppColors.textSecondary,
+        fontFamily: 'Inter',
       ),
     ),
     dividerTheme: const DividerThemeData(
@@ -106,11 +115,13 @@ class AppTheme {
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: AppColors.error, width: 2),
       ),
-      labelStyle: GoogleFonts.inter(
+      labelStyle: const TextStyle(
         color: AppColors.textSecondary,
+        fontFamily: 'Inter',
       ),
-      hintStyle: GoogleFonts.inter(
+      hintStyle: const TextStyle(
         color: AppColors.textTertiary,
+        fontFamily: 'Inter',
       ),
     ),
     buttonTheme: ButtonThemeData(
@@ -152,26 +163,28 @@ class AppTheme {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
-      labelStyle: GoogleFonts.inter(
+      labelStyle: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 12,
+        fontFamily: 'Inter',
       ),
     ),
-    tabBarTheme: const TabBarTheme(
+    tabBarTheme: const TabBarThemeData(
       indicatorColor: AppColors.primary,
       labelColor: AppColors.textPrimary,
       unselectedLabelColor: AppColors.textSecondary,
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: AppColors.surface,
-      contentTextStyle: GoogleFonts.inter(
+      contentTextStyle: const TextStyle(
         color: AppColors.textPrimary,
+        fontFamily: 'Inter',
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
       ),
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -188,20 +201,21 @@ class AppTheme {
   );
 
   // Define a custom code font theme that uses monospace for code blocks
-  static final TextTheme codeTextTheme = GoogleFonts.firaCodeTextTheme(
-    ThemeData.dark().textTheme.copyWith(
-      bodyLarge: GoogleFonts.firaCode(
-        fontSize: 14,
-        color: AppColors.textPrimary,
-      ),
-      bodyMedium: GoogleFonts.firaCode(
-        fontSize: 12,
-        color: AppColors.textPrimary,
-      ),
-      bodySmall: GoogleFonts.firaCode(
-        fontSize: 10,
-        color: AppColors.textPrimary,
-      ),
+  static const TextTheme codeTextTheme = TextTheme(
+    bodyLarge: TextStyle(
+      fontSize: 14,
+      color: AppColors.textPrimary,
+      fontFamily: 'Courier New',
+    ),
+    bodyMedium: TextStyle(
+      fontSize: 12,
+      color: AppColors.textPrimary,
+      fontFamily: 'Courier New',
+    ),
+    bodySmall: TextStyle(
+      fontSize: 10,
+      color: AppColors.textPrimary,
+      fontFamily: 'Courier New',
     ),
   );
 }

@@ -87,17 +87,17 @@ class TableBloatCard extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: SfCartesianChart(
-                  primaryXAxis: CategoryAxis(
-                    labelStyle: const TextStyle(
+                  primaryXAxis: const CategoryAxis(
+                    labelStyle: TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
                   ),
-                  primaryYAxis: NumericAxis(
+                  primaryYAxis: const NumericAxis(
                     minimum: 0,
                     maximum: 100,
                     labelFormat: '{value}%',
-                    labelStyle: const TextStyle(
+                    labelStyle: TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
@@ -129,7 +129,7 @@ class TableBloatCard extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             child: DataTable(
               columnSpacing: 16,
-              headingRowColor: MaterialStateProperty.all(AppColors.chipBackground),
+              headingRowColor: WidgetStateProperty.all(AppColors.chipBackground),
               columns: const [
                 DataColumn(label: Text('Table')),
                 DataColumn(label: Text('Size')),
