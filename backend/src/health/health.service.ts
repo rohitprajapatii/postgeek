@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { Injectable } from "@nestjs/common";
+import { DatabaseService } from "../database/database.service";
 
 @Injectable()
 export class HealthService {
@@ -40,8 +40,8 @@ export class HealthService {
         replication: replicationStatus,
       };
     } catch (error) {
-      console.error('Error fetching health overview:', error);
-      return { 
+      console.error("Error fetching health overview:", error);
+      return {
         connected: true,
         error: error.message,
       };
@@ -70,7 +70,7 @@ export class HealthService {
       ORDER BY n_dead_tup DESC
       LIMIT 10;
     `;
-    
+
     const result = await this.databaseService.query(vacuumQuery);
     return result.rows;
   }
@@ -87,7 +87,7 @@ export class HealthService {
         (SELECT setting::int res_for_super FROM pg_settings WHERE name = 'superuser_reserved_connections') t2,
         (SELECT setting::int max_conn FROM pg_settings WHERE name = 'max_connections') t3;
     `;
-    
+
     const result = await this.databaseService.query(connectionQuery);
     return result.rows[0];
   }
@@ -100,7 +100,7 @@ export class HealthService {
       FROM pg_stat_database
       WHERE datname = current_database();
     `;
-    
+
     const result = await this.databaseService.query(deadlockQuery);
     return result.rows[0];
   }
@@ -113,7 +113,7 @@ export class HealthService {
         SUM(heap_blks_hit) / (SUM(heap_blks_hit) + SUM(heap_blks_read)) as ratio
       FROM pg_statio_user_tables;
     `;
-    
+
     const result = await this.databaseService.query(cacheHitQuery);
     return result.rows[0];
   }
@@ -126,7 +126,7 @@ export class HealthService {
       FROM pg_database
       WHERE datname = current_database();
     `;
-    
+
     const result = await this.databaseService.query(sizeQuery);
     return result.rows[0];
   }
@@ -145,12 +145,12 @@ export class HealthService {
           replay_lag
         FROM pg_stat_replication;
       `;
-      
+
       const result = await this.databaseService.query(replicationQuery);
       return result.rows;
     } catch (error) {
       // Replication info might not be available for all users/databases
-      return { error: 'Replication information not available' };
+      return { error: "Replication information not available" };
     }
   }
 
@@ -174,7 +174,7 @@ export class HealthService {
       ORDER BY seq_scan DESC, seq_tup_read DESC
       LIMIT 10;
     `;
-    
+
     const result = await this.databaseService.query(missingIndexQuery);
     return result.rows;
   }
@@ -194,7 +194,7 @@ export class HealthService {
       ORDER BY pg_relation_size(indexrelid) DESC
       LIMIT 10;
     `;
-    
+
     const result = await this.databaseService.query(unusedIndexQuery);
     return result.rows;
   }
@@ -206,19 +206,19 @@ export class HealthService {
       ),
       table_stats AS (
         SELECT
-          schemaname,
-          relname,
-          n_live_tup,
-          n_dead_tup,
+          t.schemaname,
+          t.relname,
+          t.n_live_tup,
+          t.n_dead_tup,
           c.reltuples AS expected_tuples,
-          CEIL((c.relpages * constants.bs) / (CASE WHEN avg_width = 0 THEN 1 ELSE avg_width END)::numeric) AS estimated_rows,
-          CASE WHEN n_live_tup = 0 THEN 0 ELSE ROUND((n_dead_tup::numeric / n_live_tup::numeric) * 100, 2) END AS dead_tup_ratio,
+          CEIL((c.relpages * constants.bs) / (CASE WHEN s.avg_width = 0 THEN 1 ELSE s.avg_width END)::numeric) AS estimated_rows,
+          CASE WHEN t.n_live_tup = 0 THEN 0 ELSE ROUND((t.n_dead_tup::numeric / t.n_live_tup::numeric) * 100, 2) END AS dead_tup_ratio,
           c.relpages * constants.bs AS table_size_bytes,
           pg_size_pretty(c.relpages * constants.bs) AS table_size
         FROM pg_stat_user_tables t
         JOIN pg_class c ON t.relname = c.relname AND t.schemaname = c.relnamespace::regnamespace::text
         CROSS JOIN constants
-        JOIN pg_stats ON c.relname = pg_stats.tablename
+        LEFT JOIN pg_stats s ON c.relname = s.tablename AND t.schemaname = s.schemaname
       )
       SELECT 
         schemaname as schema,
@@ -230,22 +230,23 @@ export class HealthService {
         estimated_rows,
         CASE 
           WHEN estimated_rows = 0 THEN 0
-          ELSE ROUND(((expected_tuples - estimated_rows) / expected_tuples) * 100, 2)
+          ELSE ROUND(((expected_tuples - estimated_rows)::numeric / expected_tuples::numeric) * 100, 2)
         END as bloat_ratio,
         table_size
       FROM table_stats
       WHERE expected_tuples > 10000
-        AND ((expected_tuples - estimated_rows) / expected_tuples) > 0.2
+        AND estimated_rows > 0
+        AND ((expected_tuples - estimated_rows)::numeric / expected_tuples::numeric) > 0.2
       ORDER BY bloat_ratio DESC
       LIMIT 10;
     `;
-    
+
     try {
       const result = await this.databaseService.query(tableBloatQuery);
       return result.rows;
     } catch (error) {
-      console.error('Error fetching table bloat:', error);
-      return { error: 'Could not calculate table bloat statistics' };
+      console.error("Error fetching table bloat:", error);
+      return { error: "Could not calculate table bloat statistics" };
     }
   }
 }

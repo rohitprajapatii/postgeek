@@ -1,25 +1,67 @@
-import { Injectable } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { Injectable } from "@nestjs/common";
+import { DatabaseService } from "../database/database.service";
 
 @Injectable()
 export class QueriesService {
   constructor(private readonly databaseService: DatabaseService) {}
 
-  async getSlowQueries(limit: number = 10) {
-    // Check if pg_stat_statements is available
+  private async checkPgStatStatements(): Promise<boolean> {
     try {
       const checkExtension = await this.databaseService.query(
         "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements')"
       );
-      
-      if (!checkExtension.rows[0].exists) {
+      return checkExtension.rows[0].exists;
+    } catch (error) {
+      console.error("Error checking pg_stat_statements extension:", error);
+      return false;
+    }
+  }
+
+  private async getAvailableColumns(): Promise<string[]> {
+    try {
+      const result = await this.databaseService.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'pg_stat_statements' 
+          AND table_schema = 'public'
+        ORDER BY ordinal_position;
+      `);
+      return result.rows.map((row) => row.column_name);
+    } catch (error) {
+      console.error("Error getting available columns:", error);
+      // Return basic columns that should be available in all versions
+      return [
+        "queryid",
+        "query",
+        "calls",
+        "total_exec_time",
+        "mean_exec_time",
+        "min_exec_time",
+        "max_exec_time",
+        "stddev_exec_time",
+        "rows",
+        "shared_blks_hit",
+        "shared_blks_read",
+        "shared_blks_dirtied",
+        "shared_blks_written",
+      ];
+    }
+  }
+
+  async getSlowQueries(limit: number = 10) {
+    try {
+      const hasExtension = await this.checkPgStatStatements();
+
+      if (!hasExtension) {
         return {
           error: "pg_stat_statements extension is not installed",
-          hint: "Run CREATE EXTENSION pg_stat_statements; as a superuser"
+          hint: "Run CREATE EXTENSION pg_stat_statements; as a superuser",
+          fallback:
+            "Consider enabling query logging in postgresql.conf for manual analysis",
         };
       }
-      
-      // Get the slowest queries by total execution time
+
+      // Use only the core columns that are available in all versions
       const slowQueriesQuery = `
         SELECT
           queryid,
@@ -40,26 +82,47 @@ export class QueriesService {
           local_blks_dirtied,
           local_blks_written,
           temp_blks_read,
-          temp_blks_written,
-          blk_read_time,
-          blk_write_time
+          temp_blks_written
         FROM pg_stat_statements
         WHERE query !~ '^[[:space:]]*(BEGIN|COMMIT|ROLLBACK|SET|SHOW|EXPLAIN)'
           AND query !~ 'pg_stat_statements'
         ORDER BY total_exec_time DESC
         LIMIT $1;
       `;
-      
-      const result = await this.databaseService.query(slowQueriesQuery, [limit]);
+
+      const result = await this.databaseService.query(slowQueriesQuery, [
+        limit,
+      ]);
       return result.rows;
     } catch (error) {
-      console.error('Error retrieving slow queries:', error);
+      console.error("Error retrieving slow queries:", error);
       return { error: error.message };
     }
   }
 
   async getQueryStats() {
     try {
+      const hasExtension = await this.checkPgStatStatements();
+
+      if (!hasExtension) {
+        // Return basic database stats as fallback
+        const fallbackQuery = `
+          SELECT
+            (SELECT count(*) FROM pg_stat_activity WHERE state = 'active') as active_connections,
+            (SELECT count(*) FROM pg_stat_activity) as total_connections,
+            (SELECT datname FROM pg_database WHERE datname = current_database()) as database_name,
+            (SELECT version()) as postgres_version;
+        `;
+
+        const result = await this.databaseService.query(fallbackQuery);
+        return {
+          ...result.rows[0],
+          message:
+            "pg_stat_statements extension not available - showing basic stats",
+          hint: "Enable pg_stat_statements for detailed query performance metrics",
+        };
+      }
+
       const statsQuery = `
         SELECT
           SUM(calls) as total_calls,
@@ -76,17 +139,35 @@ export class QueriesService {
         WHERE query !~ '^[[:space:]]*(BEGIN|COMMIT|ROLLBACK|SET|SHOW|EXPLAIN)'
           AND query !~ 'pg_stat_statements';
       `;
-      
+
       const result = await this.databaseService.query(statsQuery);
       return result.rows[0];
     } catch (error) {
-      console.error('Error retrieving query stats:', error);
+      console.error("Error retrieving query stats:", error);
       return { error: error.message };
     }
   }
 
   async getQueryTypes() {
     try {
+      const hasExtension = await this.checkPgStatStatements();
+
+      if (!hasExtension) {
+        // Return mock data structure for frontend compatibility
+        return [
+          {
+            query_type: "SELECT",
+            count: 0,
+            total_calls: 0,
+            total_time_ms: 0,
+            avg_time_ms: 0,
+            total_rows: 0,
+            message: "pg_stat_statements extension not available",
+            hint: "Enable pg_stat_statements for query type analysis",
+          },
+        ];
+      }
+
       const queryTypesQuery = `
         SELECT
           CASE 
@@ -107,21 +188,30 @@ export class QueriesService {
         GROUP BY query_type
         ORDER BY total_time_ms DESC;
       `;
-      
+
       const result = await this.databaseService.query(queryTypesQuery);
       return result.rows;
     } catch (error) {
-      console.error('Error retrieving query types:', error);
+      console.error("Error retrieving query types:", error);
       return { error: error.message };
     }
   }
 
   async resetQueryStats() {
     try {
-      await this.databaseService.query('SELECT pg_stat_statements_reset()');
-      return { success: true, message: 'Query statistics have been reset' };
+      const hasExtension = await this.checkPgStatStatements();
+
+      if (!hasExtension) {
+        return {
+          error: "pg_stat_statements extension is not installed",
+          hint: "Run CREATE EXTENSION pg_stat_statements; as a superuser",
+        };
+      }
+
+      await this.databaseService.query("SELECT pg_stat_statements_reset()");
+      return { success: true, message: "Query statistics have been reset" };
     } catch (error) {
-      console.error('Error resetting query stats:', error);
+      console.error("Error resetting query stats:", error);
       return { error: error.message };
     }
   }

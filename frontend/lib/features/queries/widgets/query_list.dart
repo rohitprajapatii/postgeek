@@ -47,7 +47,7 @@ class QueryList extends StatelessWidget {
     final maxTime = query['max_time_ms'] ?? 0;
     final calls = query['calls'] ?? 0;
     final rows = query['rows'] ?? 0;
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: ExpansionTile(
@@ -137,7 +137,7 @@ class QueryList extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                
+
                 // SQL code display
                 Container(
                   decoration: BoxDecoration(
@@ -158,7 +158,7 @@ class QueryList extends StatelessWidget {
                     ),
                   ),
                 ),
-                
+
                 // Optimization suggestions
                 const SizedBox(height: 16),
                 const Text(
@@ -239,7 +239,9 @@ class QueryList extends StatelessWidget {
   String _getQueryPreview(String query) {
     // Get the first line of the query for the preview
     final firstLine = query.split('\n').first.trim();
-    return firstLine.length > 60 ? '${firstLine.substring(0, 60)}...' : firstLine;
+    return firstLine.length > 60
+        ? '${firstLine.substring(0, 60)}...'
+        : firstLine;
   }
 
   String _formatQuery(String query) {
@@ -258,10 +260,20 @@ class QueryList extends StatelessWidget {
   String _generateOptimizationSuggestion(dynamic query) {
     // This is a simplified example - in a real app, you'd have more sophisticated analysis
     final queryText = (query['query'] ?? '').toString().toLowerCase();
-    final rowsPerCall = query['rows'] != null && query['calls'] != null && query['calls'] > 0
-        ? query['rows'] / query['calls']
-        : 0;
-    
+
+    // Safe null checking and type conversion for numeric values
+    final rows = query['rows'];
+    final calls = query['calls'];
+
+    double rowsPerCall = 0;
+    if (rows != null && calls != null) {
+      final rowsNum = double.tryParse(rows.toString()) ?? 0;
+      final callsNum = double.tryParse(calls.toString()) ?? 0;
+      if (callsNum > 0) {
+        rowsPerCall = rowsNum / callsNum;
+      }
+    }
+
     if (queryText.contains('select *')) {
       return 'Consider selecting only the columns you need instead of using SELECT *. This can reduce I/O and improve performance.';
     } else if (!queryText.contains(' where ')) {
