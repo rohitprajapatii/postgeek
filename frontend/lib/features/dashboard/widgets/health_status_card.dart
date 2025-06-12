@@ -14,7 +14,8 @@ class HealthStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final vacuumStatus = healthData['vacuum_status'] as List?;
     final connections = healthData['connection_count'] as Map<String, dynamic>?;
-    final cacheHitRatio = healthData['cache_hit_ratio'] as Map<String, dynamic>?;
+    final cacheHitRatio =
+        healthData['cache_hit_ratio'] as Map<String, dynamic>?;
 
     return Card(
       child: Padding(
@@ -31,31 +32,36 @@ class HealthStatusCard extends StatelessWidget {
               icon: Icons.link,
             ),
             const SizedBox(height: 16),
-            
+
             // Cache Hit Ratio
             if (cacheHitRatio != null) ...[
               _buildStatusIndicator(
                 context: context,
                 title: 'Cache Hit Ratio',
-                status: '${(double.tryParse(cacheHitRatio['ratio'].toString()) ?? 0 * 100).toStringAsFixed(2)}%',
-                isHealthy: (double.tryParse(cacheHitRatio['ratio'].toString()) ?? 0) > 0.8,
+                status:
+                    '${((double.tryParse(cacheHitRatio['ratio'].toString()) ?? 0) * 100).toStringAsFixed(2)}%',
+                isHealthy:
+                    (double.tryParse(cacheHitRatio['ratio'].toString()) ?? 0) >
+                        0.8,
                 icon: Icons.memory,
               ),
               const SizedBox(height: 16),
             ],
-            
+
             // Connection Usage
             if (connections != null) ...[
               _buildStatusIndicator(
                 context: context,
                 title: 'Connection Usage',
-                status: '${connections['used']} of ${connections['max_conn']} (${connections['free']} free)',
-                isHealthy: (int.tryParse(connections['free'].toString()) ?? 0) > 10,
+                status:
+                    '${connections['used']} of ${connections['max_conn']} (${connections['free']} free)',
+                isHealthy:
+                    (int.tryParse(connections['free'].toString()) ?? 0) > 10,
                 icon: Icons.people,
               ),
               const SizedBox(height: 16),
             ],
-            
+
             // Vacuum Status
             if (vacuumStatus != null && vacuumStatus.isNotEmpty) ...[
               _buildStatusIndicator(
@@ -66,7 +72,9 @@ class HealthStatusCard extends StatelessWidget {
                 icon: Icons.cleaning_services,
               ),
               const SizedBox(height: 8),
-              ...vacuumStatus.take(3).map((table) => _buildVacuumTableRow(context, table)),
+              ...vacuumStatus
+                  .take(3)
+                  .map((table) => _buildVacuumTableRow(context, table)),
               if (vacuumStatus.length > 3)
                 Padding(
                   padding: const EdgeInsets.only(left: 32, top: 4),
@@ -90,7 +98,7 @@ class HealthStatusCard extends StatelessWidget {
     required IconData icon,
   }) {
     final color = isHealthy ? AppColors.success : AppColors.warning;
-    
+
     return Row(
       children: [
         Icon(
@@ -132,7 +140,7 @@ class HealthStatusCard extends StatelessWidget {
     final tableName = tableData['table_name'] ?? 'Unknown';
     final deadTuples = tableData['dead_tuples'] ?? 0;
     final deadTuplesRatio = tableData['dead_tuples_ratio'] ?? 0;
-    
+
     return Padding(
       padding: const EdgeInsets.only(left: 32, top: 4),
       child: Row(
@@ -148,7 +156,9 @@ class HealthStatusCard extends StatelessWidget {
           Text(
             '$deadTuples dead tuples ($deadTuplesRatio%)',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: deadTuplesRatio > 20 ? AppColors.warning : AppColors.textSecondary,
+                  color: (double.tryParse(deadTuplesRatio.toString()) ?? 0) > 20
+                      ? AppColors.warning
+                      : AppColors.textSecondary,
                 ),
           ),
         ],

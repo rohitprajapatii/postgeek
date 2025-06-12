@@ -1,10 +1,9 @@
-import { Injectable } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
+import { Injectable } from "@nestjs/common";
+import { DatabaseService } from "../database/database.service";
 
 @Injectable()
 export class StatisticsService {
   constructor(private readonly databaseService: DatabaseService) {}
-
   async getDatabaseOverview() {
     const overviewQuery = `
       SELECT
@@ -33,7 +32,7 @@ export class StatisticsService {
       JOIN pg_stat_database ON pg_database.datname = pg_stat_database.datname
       WHERE pg_database.datname = current_database();
     `;
-    
+
     const result = await this.databaseService.query(overviewQuery);
     return result.rows[0];
   }
@@ -41,37 +40,38 @@ export class StatisticsService {
   async getTableStats() {
     const tableStatsQuery = `
       SELECT
-        schemaname as schema,
-        relname as table_name,
-        pg_size_pretty(pg_total_relation_size(schemaname || '.' || relname)) as total_size,
-        pg_total_relation_size(schemaname || '.' || relname) as total_bytes,
-        pg_size_pretty(pg_relation_size(schemaname || '.' || relname)) as table_size,
-        pg_relation_size(schemaname || '.' || relname) as table_bytes,
-        pg_size_pretty(pg_total_relation_size(schemaname || '.' || relname) - pg_relation_size(schemaname || '.' || relname)) as index_size,
-        pg_total_relation_size(schemaname || '.' || relname) - pg_relation_size(schemaname || '.' || relname) as index_bytes,
-        n_live_tup as live_rows,
-        n_dead_tup as dead_rows,
-        seq_scan as sequential_scans,
-        idx_scan as index_scans,
-        CASE WHEN (seq_scan + idx_scan) > 0
-          THEN ROUND(idx_scan::numeric / (seq_scan + idx_scan)::numeric * 100, 2)
+        st.schemaname as schema,
+        st.relname as table_name,
+        pg_size_pretty(pg_total_relation_size(c.oid)) as total_size,
+        pg_total_relation_size(c.oid) as total_bytes,
+        pg_size_pretty(pg_relation_size(c.oid)) as table_size,
+        pg_relation_size(c.oid) as table_bytes,
+        pg_size_pretty(pg_total_relation_size(c.oid) - pg_relation_size(c.oid)) as index_size,
+        pg_total_relation_size(c.oid) - pg_relation_size(c.oid) as index_bytes,
+        st.n_live_tup as live_rows,
+        st.n_dead_tup as dead_rows,
+        st.seq_scan as sequential_scans,
+        st.idx_scan as index_scans,
+        CASE WHEN (st.seq_scan + st.idx_scan) > 0
+          THEN ROUND(st.idx_scan::numeric / (st.seq_scan + st.idx_scan)::numeric * 100, 2)
           ELSE 0
         END as index_scan_ratio,
-        seq_tup_read as rows_sequential_read,
-        idx_tup_fetch as rows_index_fetched,
-        n_tup_ins as rows_inserted,
-        n_tup_upd as rows_updated,
-        n_tup_del as rows_deleted,
-        n_tup_hot_upd as rows_hot_updated,
-        vacuum_count as vacuum_count,
-        autovacuum_count as autovacuum_count,
-        analyze_count as analyze_count,
-        autoanalyze_count as autoanalyze_count
-      FROM pg_stat_user_tables
-      ORDER BY pg_total_relation_size(schemaname || '.' || relname) DESC
+        st.seq_tup_read as rows_sequential_read,
+        st.idx_tup_fetch as rows_index_fetched,
+        st.n_tup_ins as rows_inserted,
+        st.n_tup_upd as rows_updated,
+        st.n_tup_del as rows_deleted,
+        st.n_tup_hot_upd as rows_hot_updated,
+        st.vacuum_count as vacuum_count,
+        st.autovacuum_count as autovacuum_count,
+        st.analyze_count as analyze_count,
+        st.autoanalyze_count as autoanalyze_count
+      FROM pg_stat_user_tables st
+      JOIN pg_class c ON st.relid = c.oid
+      ORDER BY pg_total_relation_size(c.oid) DESC
       LIMIT 20;
     `;
-    
+
     const result = await this.databaseService.query(tableStatsQuery);
     return result.rows;
   }
@@ -96,7 +96,7 @@ export class StatisticsService {
       ORDER BY pg_relation_size(indexrelid) DESC
       LIMIT 20;
     `;
-    
+
     const result = await this.databaseService.query(indexStatsQuery);
     return result.rows;
   }
@@ -126,7 +126,7 @@ export class StatisticsService {
       ORDER BY (heap_blks_read + idx_blks_read) DESC
       LIMIT 20;
     `;
-    
+
     const result = await this.databaseService.query(ioStatsQuery);
     return result.rows;
   }
@@ -147,7 +147,7 @@ export class StatisticsService {
         stats_reset as stats_reset
       FROM pg_stat_bgwriter;
     `;
-    
+
     const result = await this.databaseService.query(bgWriterQuery);
     return result.rows[0];
   }
