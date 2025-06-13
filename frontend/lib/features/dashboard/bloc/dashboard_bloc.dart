@@ -46,12 +46,21 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
     try {
       // Fetch all required dashboard data
-      final databaseOverview = await _fetchDatabaseOverview();
-      final slowQueries = await _fetchSlowQueries();
-      final activeSessions = await _fetchActiveSessions();
-      final healthOverview = await _fetchHealthOverview();
-      final tableStats = await _fetchTableStats();
-      final queryStats = await _fetchQueryStats();
+      final results = await Future.wait([
+        _fetchDatabaseOverview(),
+        _fetchSlowQueries(),
+        _fetchActiveSessions(),
+        _fetchHealthOverview(),
+        _fetchTableStats(),
+        _fetchQueryStats(),
+      ]);
+
+      final databaseOverview = results[0] as Map<String, dynamic>;
+      final slowQueries = results[1] as List<dynamic>;
+      final activeSessions = results[2] as List<dynamic>;
+      final healthOverview = results[3] as Map<String, dynamic>;
+      final tableStats = results[4] as List<dynamic>;
+      final queryStats = results[5] as Map<String, dynamic>;
 
       // Create dashboard data object
       final dashboardData = DashboardData(
@@ -107,7 +116,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   }
 
   Future<List<dynamic>> _fetchSlowQueries() async {
-    final response = await apiService.get('/api/queries/slow', queryParameters: {'limit': 5});
+    final response = await apiService
+        .get('/api/queries/slow', queryParameters: {'limit': 5});
     return response.data is List ? response.data : [];
   }
 

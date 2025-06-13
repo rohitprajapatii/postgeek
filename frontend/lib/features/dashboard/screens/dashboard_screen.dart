@@ -10,8 +10,19 @@ import '../widgets/slow_queries_card.dart';
 import '../widgets/activity_overview_card.dart';
 import '../widgets/database_metrics_chart.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  @override
+  void initState() {
+    context.read<DashboardBloc>().add(LoadDashboardData());
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +41,9 @@ class DashboardScreen extends StatelessWidget {
                     icon: const Icon(Icons.refresh),
                     tooltip: 'Refresh data',
                     onPressed: () {
-                      context.read<DashboardBloc>().add(LoadDashboardData());
+                      context
+                          .read<DashboardBloc>()
+                          .add(StartDashboardRefresh());
                     },
                   ),
                   const SizedBox(width: 16),

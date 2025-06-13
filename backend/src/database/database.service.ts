@@ -62,7 +62,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements')"
       );
       const hasStatStatements = extensionResult.rows[0].exists;
-      console.log("[DatabaseService] Extension query successful");
+      console.log(
+        "[DatabaseService] Extension query successful",
+        extensionResult.rows[0]
+      );
 
       console.log("[DatabaseService] Checking permissions...");
       // Check for monitoring role permissions
@@ -70,7 +73,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         "SELECT has_database_privilege(current_user, current_database(), 'CONNECT') as can_connect, " +
           "has_schema_privilege(current_user, 'pg_catalog', 'USAGE') as can_use_catalog"
       );
-      console.log("[DatabaseService] Permissions query successful");
+      console.log(
+        "[DatabaseService] Permissions query successful",
+        permissionsResult
+      );
 
       console.log(`[DatabaseService] ✅ Connected to PostgreSQL: ${version}`);
       console.log(
