@@ -8,8 +8,19 @@ import '../widgets/query_stats_chart.dart';
 import '../widgets/query_list.dart';
 import '../widgets/query_types_chart.dart';
 
-class QueriesScreen extends StatelessWidget {
+class QueriesScreen extends StatefulWidget {
   const QueriesScreen({super.key});
+
+  @override
+  State<QueriesScreen> createState() => _QueriesScreenState();
+}
+
+class _QueriesScreenState extends State<QueriesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<QueriesBloc>().add(const LoadQueries());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +53,7 @@ class QueriesScreen extends StatelessWidget {
                   const SizedBox(width: 16),
                 ],
               ),
-              
+
               // Last Updated Info
               if (state.queryData != null)
                 SliverToBoxAdapter(
@@ -55,9 +66,10 @@ class QueriesScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              
+
               // Loading Indicator
-              if (state.status == QueriesStatus.loading && state.queryData == null)
+              if (state.status == QueriesStatus.loading &&
+                  state.queryData == null)
                 const SliverFillRemaining(
                   child: Center(
                     child: CircularProgressIndicator(),
@@ -88,7 +100,9 @@ class QueriesScreen extends StatelessWidget {
                         const SizedBox(height: 24),
                         ElevatedButton(
                           onPressed: () {
-                            context.read<QueriesBloc>().add(const LoadQueries());
+                            context
+                                .read<QueriesBloc>()
+                                .add(const LoadQueries());
                           },
                           child: const Text('Retry'),
                         ),
@@ -115,7 +129,7 @@ class QueriesScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Query Types Distribution
                       Text(
                         'Query Types Distribution',
@@ -129,7 +143,7 @@ class QueriesScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Slow Queries List
                       Text(
                         'Slow Queries',
@@ -155,9 +169,8 @@ class QueriesScreen extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Reset Query Statistics'),
         content: const Text(
-          'This will reset all query statistics in pg_stat_statements. '
-          'This operation cannot be undone. Do you want to continue?'
-        ),
+            'This will reset all query statistics in pg_stat_statements. '
+            'This operation cannot be undone. Do you want to continue?'),
         actions: [
           TextButton(
             onPressed: () {

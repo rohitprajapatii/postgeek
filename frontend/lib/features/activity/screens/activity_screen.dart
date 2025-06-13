@@ -9,8 +9,19 @@ import '../widgets/idle_sessions_table.dart';
 import '../widgets/locks_table.dart';
 import '../widgets/blocked_queries_table.dart';
 
-class ActivityScreen extends StatelessWidget {
+class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
+
+  @override
+  State<ActivityScreen> createState() => _ActivityScreenState();
+}
+
+class _ActivityScreenState extends State<ActivityScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<ActivityBloc>().add(LoadActivity());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +38,7 @@ class ActivityScreen extends StatelessWidget {
                 ),
               );
             }
-            
+
             if (state.errorMessage != null) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -66,7 +77,7 @@ class ActivityScreen extends StatelessWidget {
                     isScrollable: true,
                   ),
                 ),
-                
+
                 // Last Updated Info
                 if (state.activityData != null)
                   SliverToBoxAdapter(
@@ -79,16 +90,18 @@ class ActivityScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                
+
                 // Loading Indicator
-                if (state.status == ActivityStatus.loading && state.activityData == null)
+                if (state.status == ActivityStatus.loading &&
+                    state.activityData == null)
                   const SliverFillRemaining(
                     child: Center(
                       child: CircularProgressIndicator(),
                     ),
                   )
                 // Error Message
-                else if (state.status == ActivityStatus.error && state.activityData == null)
+                else if (state.status == ActivityStatus.error &&
+                    state.activityData == null)
                   SliverFillRemaining(
                     child: Center(
                       child: Column(
@@ -132,7 +145,7 @@ class ActivityScreen extends StatelessWidget {
                             _showTerminateConfirmation(context, pid);
                           },
                         ),
-                        
+
                         // Idle Sessions Tab
                         IdleSessionsTable(
                           sessions: state.activityData!.idleSessions,
@@ -140,12 +153,12 @@ class ActivityScreen extends StatelessWidget {
                             _showTerminateConfirmation(context, pid);
                           },
                         ),
-                        
+
                         // Locks Tab
                         LocksTable(
                           locks: state.activityData!.locks,
                         ),
-                        
+
                         // Blocked Queries Tab
                         BlockedQueriesTable(
                           blockedQueries: state.activityData!.blockedQueries,
@@ -169,10 +182,8 @@ class ActivityScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Terminate Session'),
-        content: Text(
-          'This will terminate the database session with PID $pid. '
-          'Any unsaved work in this session will be lost. Do you want to continue?'
-        ),
+        content: Text('This will terminate the database session with PID $pid. '
+            'Any unsaved work in this session will be lost. Do you want to continue?'),
         actions: [
           TextButton(
             onPressed: () {

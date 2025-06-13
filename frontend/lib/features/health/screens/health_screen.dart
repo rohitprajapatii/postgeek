@@ -9,8 +9,19 @@ import '../widgets/missing_indexes_card.dart';
 import '../widgets/unused_indexes_card.dart';
 import '../widgets/table_bloat_card.dart';
 
-class HealthScreen extends StatelessWidget {
+class HealthScreen extends StatefulWidget {
   const HealthScreen({super.key});
+
+  @override
+  State<HealthScreen> createState() => _HealthScreenState();
+}
+
+class _HealthScreenState extends State<HealthScreen> {
+  @override
+  void initState() {
+    super.initState();
+    context.read<HealthBloc>().add(LoadHealthData());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +46,7 @@ class HealthScreen extends StatelessWidget {
                   const SizedBox(width: 16),
                 ],
               ),
-              
+
               // Last Updated Info
               if (state.healthData != null)
                 SliverToBoxAdapter(
@@ -48,9 +59,10 @@ class HealthScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              
+
               // Loading Indicator
-              if (state.status == HealthStatus.loading && state.healthData == null)
+              if (state.status == HealthStatus.loading &&
+                  state.healthData == null)
                 const SliverFillRemaining(
                   child: Center(
                     child: CircularProgressIndicator(),
@@ -105,7 +117,7 @@ class HealthScreen extends StatelessWidget {
                         healthData: state.healthData!.healthOverview,
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Missing Indexes
                       Text(
                         'Missing Indexes',
@@ -116,7 +128,7 @@ class HealthScreen extends StatelessWidget {
                         indexes: state.healthData!.missingIndexes,
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Unused Indexes
                       Text(
                         'Unused Indexes',
@@ -127,7 +139,7 @@ class HealthScreen extends StatelessWidget {
                         indexes: state.healthData!.unusedIndexes,
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Table Bloat
                       Text(
                         'Table Bloat',
