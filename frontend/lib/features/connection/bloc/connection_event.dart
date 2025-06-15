@@ -39,3 +39,5 @@ class ConnectRequested extends ConnectionEvent {
 }
 
 class DisconnectRequested extends ConnectionEvent {}
+
+class ResetConnection extends ConnectionEvent {}

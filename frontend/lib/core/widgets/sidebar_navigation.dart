@@ -77,7 +77,8 @@ class SidebarNavigation extends StatelessWidget {
           // Connection Info
           Container(
             padding: const EdgeInsets.all(16),
-            child: BlocBuilder<connection_bloc.ConnectionBloc, connection_bloc.ConnectionState>(
+            child: BlocBuilder<connection_bloc.ConnectionBloc,
+                connection_bloc.ConnectionState>(
               builder: (context, state) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,7 +120,7 @@ class SidebarNavigation extends StatelessWidget {
                         icon: const Icon(Icons.logout, size: 16),
                         label: const Text('Disconnect'),
                         onPressed: () {
-                          context.read<connection_bloc.ConnectionBloc>().add(connection_bloc.DisconnectRequested());
+                          _showDisconnectConfirmation(context);
                         },
                       ),
                     ),
@@ -145,7 +146,8 @@ class SidebarNavigation extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        color: isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+        color:
+            isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
       ),
       child: ListTile(
         leading: Icon(
@@ -170,6 +172,39 @@ class SidebarNavigation extends StatelessWidget {
         ),
         dense: true,
         visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  void _showDisconnectConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Disconnect from Database'),
+        content: const Text(
+            'Are you sure you want to disconnect from the database? '
+            'You will need to reconnect to continue using the application.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              context
+                  .read<connection_bloc.ConnectionBloc>()
+                  .add(connection_bloc.DisconnectRequested());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Disconnect'),
+          ),
+        ],
       ),
     );
   }

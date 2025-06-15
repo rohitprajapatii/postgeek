@@ -14,34 +14,27 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: BlocListener<connection_bloc.ConnectionBloc, connection_bloc.ConnectionState>(
-        listener: (context, state) {
-          if (state.status == connection_bloc.ConnectionStatus.disconnected && 
-              GoRouterState.of(context).uri.path != '/') {
-            context.go('/');
-          }
-        },
-        child: Row(
-          children: [
-            BlocBuilder<connection_bloc.ConnectionBloc, connection_bloc.ConnectionState>(
-              builder: (context, state) {
-                // Only show sidebar if connected
-                if (state.status == connection_bloc.ConnectionStatus.connected) {
-                  return SidebarNavigation(
-                    currentPath: GoRouterState.of(context).uri.path,
-                  );
-                }
-                return const SizedBox();
-              },
+      body: Row(
+        children: [
+          BlocBuilder<connection_bloc.ConnectionBloc,
+              connection_bloc.ConnectionState>(
+            builder: (context, state) {
+              // Only show sidebar if connected
+              if (state.status == connection_bloc.ConnectionStatus.connected) {
+                return SidebarNavigation(
+                  currentPath: GoRouterState.of(context).uri.path,
+                );
+              }
+              return const SizedBox();
+            },
+          ),
+          Expanded(
+            child: Container(
+              color: AppColors.background,
+              child: child,
             ),
-            Expanded(
-              child: Container(
-                color: AppColors.background,
-                child: child,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

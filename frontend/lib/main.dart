@@ -59,20 +59,26 @@ class PostGeekApp extends StatelessWidget {
             ),
           ),
         ],
-        child: MaterialApp.router(
-          title: 'PostGeek',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.darkTheme,
-          routerConfig: AppRouter.router,
-          builder: (context, child) => ResponsiveBreakpoints.builder(
-            child: child!,
-            breakpoints: [
-              const Breakpoint(start: 0, end: 600, name: MOBILE),
-              const Breakpoint(start: 601, end: 900, name: TABLET),
-              const Breakpoint(start: 901, end: 1200, name: DESKTOP),
-              const Breakpoint(start: 1201, end: double.infinity, name: 'XL'),
-            ],
-          ),
+        child: Builder(
+          builder: (context) {
+            return MaterialApp.router(
+              title: 'PostGeek',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.darkTheme,
+              routerConfig:
+                  AppRouter.createRouter(context.read<ConnectionBloc>()),
+              builder: (context, child) => ResponsiveBreakpoints.builder(
+                child: child!,
+                breakpoints: [
+                  const Breakpoint(start: 0, end: 600, name: MOBILE),
+                  const Breakpoint(start: 601, end: 900, name: TABLET),
+                  const Breakpoint(start: 901, end: 1200, name: DESKTOP),
+                  const Breakpoint(
+                      start: 1201, end: double.infinity, name: 'XL'),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );

@@ -14,6 +14,7 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
       : super(const ConnectionState.initial()) {
     on<ConnectRequested>(_onConnectRequested);
     on<DisconnectRequested>(_onDisconnectRequested);
+    on<ResetConnection>(_onResetConnection);
   }
 
   Future<void> _onConnectRequested(
@@ -99,8 +100,19 @@ class ConnectionBloc extends Bloc<ConnectionEvent, ConnectionState> {
     } catch (e) {
       // Ignore any errors on disconnect
     } finally {
-      // Always reset the connection state
-      emit(const ConnectionState.initial());
+      // Set status to disconnected instead of initial
+      emit(state.copyWith(
+        status: ConnectionStatus.disconnected,
+        connectionInfo: null,
+        errorMessage: null,
+      ));
     }
+  }
+
+  Future<void> _onResetConnection(
+    ResetConnection event,
+    Emitter<ConnectionState> emit,
+  ) async {
+    emit(const ConnectionState.initial());
   }
 }

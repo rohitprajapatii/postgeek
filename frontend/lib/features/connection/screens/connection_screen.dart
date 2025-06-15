@@ -12,19 +12,31 @@ class ConnectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: BlocConsumer<connection_bloc.ConnectionBloc, connection_bloc.ConnectionState>(
+      body: BlocConsumer<connection_bloc.ConnectionBloc,
+          connection_bloc.ConnectionState>(
         listener: (context, state) {
           if (state.status == connection_bloc.ConnectionStatus.connected) {
             context.go('/dashboard');
           }
-          
-          if (state.status == connection_bloc.ConnectionStatus.error && state.errorMessage != null) {
+
+          if (state.status == connection_bloc.ConnectionStatus.error &&
+              state.errorMessage != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.errorMessage!),
                 backgroundColor: AppColors.error,
               ),
             );
+          }
+
+          // Handle disconnected state - reset any pending states
+          if (state.status == connection_bloc.ConnectionStatus.disconnected) {
+            // Clear any existing snackbars
+            ScaffoldMessenger.of(context).clearSnackBars();
+            // Reset connection state to initial for clean UI
+            context
+                .read<connection_bloc.ConnectionBloc>()
+                .add(connection_bloc.ResetConnection());
           }
         },
         builder: (context, state) {
@@ -68,10 +80,11 @@ class ConnectionScreen extends StatelessWidget {
                         ),
                   ),
                   const SizedBox(height: 32),
-                  
+
                   // Connection Form
                   ConnectionForm(
-                    isConnecting: state.status == connection_bloc.ConnectionStatus.connecting,
+                    isConnecting: state.status ==
+                        connection_bloc.ConnectionStatus.connecting,
                   ),
                 ],
               ),
