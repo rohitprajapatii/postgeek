@@ -66,6 +66,25 @@ USER nobody
 # Build the web app
 RUN flutter build web --release
 
+# Switch back to root to fix permissions and handle missing assets
+USER root
+
+# Ensure icons are properly copied (Flutter build sometimes misses them)
+RUN if [ -d "/app/frontend/web/icons" ]; then \
+        cp -r /app/frontend/web/icons /app/frontend/build/web/ || echo "Icons copy failed"; \
+    fi
+
+# Ensure critical asset files are present (regenerate if missing)
+RUN cd /app/frontend && \
+    if [ ! -f "build/web/assets/FontManifest.json" ] || [ ! -f "build/web/assets/AssetManifest.json" ]; then \
+        echo "Critical asset files missing, rebuilding..."; \
+        flutter build web --release; \
+    fi
+
+# Fix permissions on build output
+RUN chown -R root:root /app/frontend/build/web
+RUN chmod -R 755 /app/frontend/build/web
+
 # Backend production stage
 FROM node:18-alpine AS backend
 
@@ -85,8 +104,12 @@ FROM nginx:alpine AS frontend
 # Copy nginx configuration
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
-# Copy built frontend files
-COPY --from=frontend-build /app/frontend/build/web /usr/share/nginx/html
+# Copy built frontend files with proper permissions
+COPY --from=frontend-build --chown=root:root /app/frontend/build/web /usr/share/nginx/html
+
+# Ensure all files have correct permissions
+RUN chmod -R 755 /usr/share/nginx/html
+RUN find /usr/share/nginx/html -type f -exec chmod 644 {} \;
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
