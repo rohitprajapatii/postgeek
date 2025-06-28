@@ -6,6 +6,7 @@ import '../../connection/bloc/connection_bloc.dart';
 import '../models/schema_info.dart';
 import '../models/table_details.dart';
 import '../models/table_data.dart';
+import '../models/table_tab.dart';
 
 part 'data_management_event.dart';
 part 'data_management_state.dart';
@@ -23,6 +24,11 @@ class DataManagementBloc
     on<SearchTables>(_onSearchTables);
     on<LoadTableDetails>(_onLoadTableDetails);
     on<LoadTableData>(_onLoadTableData);
+    on<OpenTableTab>(_onOpenTableTab);
+    on<CloseTableTab>(_onCloseTableTab);
+    on<SwitchToTab>(_onSwitchToTab);
+    on<ReorderTabs>(_onReorderTabs);
+    on<RefreshTabData>(_onRefreshTabData);
     on<CreateRecord>(_onCreateRecord);
     on<UpdateRecord>(_onUpdateRecord);
     on<DeleteRecord>(_onDeleteRecord);
@@ -208,6 +214,169 @@ class DataManagementBloc
     }
   }
 
+  // Tab Management Event Handlers
+  Future<void> _onOpenTableTab(
+    OpenTableTab event,
+    Emitter<DataManagementState> emit,
+  ) async {
+    final tabId = '${event.schemaName}.${event.tableName}';
+
+    // Check if tab is already open
+    final existingTabIndex =
+        state.openTabs.indexWhere((tab) => tab.id == tabId);
+
+    if (existingTabIndex != -1) {
+      // Tab already exists, just switch to it
+      emit(state.copyWith(activeTabId: tabId));
+      return;
+    }
+
+    // Create new tab
+    final newTab = TableTab(
+      id: tabId,
+      displayName: event.tableName,
+      schemaName: event.schemaName,
+      tableName: event.tableName,
+      isLoading: true,
+    );
+
+    final updatedTabs = List<TableTab>.from(state.openTabs)..add(newTab);
+
+    emit(state.copyWith(
+      openTabs: updatedTabs,
+      activeTabId: tabId,
+    ));
+
+    // Load table details and data
+    try {
+      final detailsResponse = await apiService.get(
+        '/api/data-management/tables/${event.schemaName}/${event.tableName}/info',
+      );
+
+      if (detailsResponse.statusCode == 200) {
+        final tableDetails =
+            TableDetails.fromJson(detailsResponse.data['data']);
+
+        final dataResponse = await apiService.get(
+          '/api/data-management/tables/${event.schemaName}/${event.tableName}/data',
+        );
+
+        if (dataResponse.statusCode == 200) {
+          final tableData = PaginatedTableData.fromJson(dataResponse.data);
+
+          final updatedTab = newTab.copyWith(
+            isLoading: false,
+            tableDetails: tableDetails,
+            tableData: tableData,
+          );
+
+          final finalTabs = state.openTabs
+              .map((tab) => tab.id == tabId ? updatedTab : tab)
+              .toList();
+
+          emit(state.copyWith(openTabs: finalTabs));
+        }
+      }
+    } catch (e) {
+      final errorTab = newTab.copyWith(
+        isLoading: false,
+        errorMessage: e.toString(),
+      );
+
+      final errorTabs = state.openTabs
+          .map((tab) => tab.id == tabId ? errorTab : tab)
+          .toList();
+
+      emit(state.copyWith(openTabs: errorTabs));
+    }
+  }
+
+  void _onCloseTableTab(
+    CloseTableTab event,
+    Emitter<DataManagementState> emit,
+  ) {
+    final updatedTabs =
+        state.openTabs.where((tab) => tab.id != event.tabId).toList();
+
+    String? newActiveTabId = state.activeTabId;
+    if (state.activeTabId == event.tabId) {
+      // If closing the active tab, switch to the last remaining tab
+      newActiveTabId = updatedTabs.isNotEmpty ? updatedTabs.last.id : null;
+    }
+
+    emit(state.copyWith(
+      openTabs: updatedTabs,
+      activeTabId: newActiveTabId,
+    ));
+  }
+
+  void _onSwitchToTab(
+    SwitchToTab event,
+    Emitter<DataManagementState> emit,
+  ) {
+    if (state.openTabs.any((tab) => tab.id == event.tabId)) {
+      emit(state.copyWith(activeTabId: event.tabId));
+    }
+  }
+
+  void _onReorderTabs(
+    ReorderTabs event,
+    Emitter<DataManagementState> emit,
+  ) {
+    final updatedTabs = List<TableTab>.from(state.openTabs);
+    final item = updatedTabs.removeAt(event.oldIndex);
+    updatedTabs.insert(event.newIndex, item);
+
+    emit(state.copyWith(openTabs: updatedTabs));
+  }
+
+  Future<void> _onRefreshTabData(
+    RefreshTabData event,
+    Emitter<DataManagementState> emit,
+  ) async {
+    final tab = state.openTabs.firstWhere((tab) => tab.id == event.tabId);
+
+    final updatedTab = tab.copyWith(isLoading: true);
+    final updatedTabs = state.openTabs
+        .map((t) => t.id == event.tabId ? updatedTab : t)
+        .toList();
+
+    emit(state.copyWith(openTabs: updatedTabs));
+
+    try {
+      final response = await apiService.get(
+        '/api/data-management/tables/${tab.schemaName}/${tab.tableName}/data',
+      );
+
+      if (response.statusCode == 200) {
+        final tableData = PaginatedTableData.fromJson(response.data);
+
+        final refreshedTab = tab.copyWith(
+          isLoading: false,
+          tableData: tableData,
+          errorMessage: null,
+        );
+
+        final finalTabs = state.openTabs
+            .map((t) => t.id == event.tabId ? refreshedTab : t)
+            .toList();
+
+        emit(state.copyWith(openTabs: finalTabs));
+      }
+    } catch (e) {
+      final errorTab = tab.copyWith(
+        isLoading: false,
+        errorMessage: e.toString(),
+      );
+
+      final errorTabs = state.openTabs
+          .map((t) => t.id == event.tabId ? errorTab : t)
+          .toList();
+
+      emit(state.copyWith(openTabs: errorTabs));
+    }
+  }
+
   Future<void> _onCreateRecord(
     CreateRecord event,
     Emitter<DataManagementState> emit,
@@ -215,7 +384,7 @@ class DataManagementBloc
     try {
       final response = await apiService.post(
         '/api/data-management/tables/${event.schemaName}/${event.tableName}/records',
-        data: {'data': event.data},
+        data: {'data': event.record},
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -226,11 +395,13 @@ class DataManagementBloc
         ));
       } else {
         emit(state.copyWith(
+          status: DataManagementStatus.error,
           errorMessage: 'Failed to create record',
         ));
       }
     } catch (e) {
       emit(state.copyWith(
+        status: DataManagementStatus.error,
         errorMessage: e.toString(),
       ));
     }
@@ -244,8 +415,8 @@ class DataManagementBloc
       final response = await apiService.put(
         '/api/data-management/tables/${event.schemaName}/${event.tableName}/records',
         data: {
-          'data': event.data,
-          'where': event.where,
+          'data': event.record,
+          'where': event.primaryKey,
         },
       );
 
@@ -257,11 +428,13 @@ class DataManagementBloc
         ));
       } else {
         emit(state.copyWith(
+          status: DataManagementStatus.error,
           errorMessage: 'Failed to update record',
         ));
       }
     } catch (e) {
       emit(state.copyWith(
+        status: DataManagementStatus.error,
         errorMessage: e.toString(),
       ));
     }
@@ -274,7 +447,7 @@ class DataManagementBloc
     try {
       final response = await apiService.delete(
         '/api/data-management/tables/${event.schemaName}/${event.tableName}/records',
-        data: {'where': event.where},
+        data: {'where': event.primaryKey},
       );
 
       if (response.statusCode == 200) {
@@ -285,11 +458,13 @@ class DataManagementBloc
         ));
       } else {
         emit(state.copyWith(
+          status: DataManagementStatus.error,
           errorMessage: 'Failed to delete record',
         ));
       }
     } catch (e) {
       emit(state.copyWith(
+        status: DataManagementStatus.error,
         errorMessage: e.toString(),
       ));
     }
@@ -304,11 +479,10 @@ class DataManagementBloc
         '/api/data-management/tables/${event.schemaName}/${event.tableName}/bulk-insert',
         data: {
           'records': event.records,
-          'upsert': event.upsert,
         },
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         // Reload table data to show the new records
         add(LoadTableData(
           schemaName: event.schemaName,
@@ -316,11 +490,13 @@ class DataManagementBloc
         ));
       } else {
         emit(state.copyWith(
-          errorMessage: 'Bulk insert failed',
+          status: DataManagementStatus.error,
+          errorMessage: 'Failed to bulk insert records',
         ));
       }
     } catch (e) {
       emit(state.copyWith(
+        status: DataManagementStatus.error,
         errorMessage: e.toString(),
       ));
     }
@@ -331,35 +507,33 @@ class DataManagementBloc
     Emitter<DataManagementState> emit,
   ) async {
     try {
-      emit(state.copyWith(isExecutingQuery: true));
+      emit(state.copyWith(status: DataManagementStatus.loading));
 
       final response = await apiService.post(
-        '/api/data-management/query/execute',
+        '/api/data-management/query',
         data: {
           'query': event.query,
-          'params': event.params,
-          'readonly': event.readonly,
         },
       );
 
       if (response.statusCode == 200) {
         final data = response.data;
-        final queryResult = QueryResult.fromJson(data['data']);
+        final queryResult = QueryResult.fromJson(data);
 
         emit(state.copyWith(
+          status: DataManagementStatus.loaded,
           queryResult: queryResult,
-          isExecutingQuery: false,
           errorMessage: null,
         ));
       } else {
         emit(state.copyWith(
-          isExecutingQuery: false,
-          errorMessage: 'Query execution failed',
+          status: DataManagementStatus.error,
+          errorMessage: 'Failed to execute query',
         ));
       }
     } catch (e) {
       emit(state.copyWith(
-        isExecutingQuery: false,
+        status: DataManagementStatus.error,
         errorMessage: e.toString(),
       ));
     }
@@ -370,34 +544,26 @@ class DataManagementBloc
     Emitter<DataManagementState> emit,
   ) async {
     try {
-      emit(state.copyWith(isExporting: true));
-
-      final response = await apiService.post(
+      final response = await apiService.get(
         '/api/data-management/tables/${event.schemaName}/${event.tableName}/export',
-        data: {
-          'format': event.format,
-          'filters': event.filters.map((f) => f.toJson()).toList(),
-        },
+        queryParameters: {'format': event.format},
       );
 
       if (response.statusCode == 200) {
-        final data = response.data;
-        final exportData = data['data'] as String;
-
+        // Handle export success (maybe show a success message)
         emit(state.copyWith(
-          exportData: exportData,
-          isExporting: false,
+          status: DataManagementStatus.loaded,
           errorMessage: null,
         ));
       } else {
         emit(state.copyWith(
-          isExporting: false,
-          errorMessage: 'Export failed',
+          status: DataManagementStatus.error,
+          errorMessage: 'Failed to export table data',
         ));
       }
     } catch (e) {
       emit(state.copyWith(
-        isExporting: false,
+        status: DataManagementStatus.error,
         errorMessage: e.toString(),
       ));
     }
@@ -409,13 +575,13 @@ class DataManagementBloc
   ) async {
     try {
       final response = await apiService.get(
-        '/api/data-management/foreign-key-data/${event.schemaName}/${event.tableName}/${event.columnName}',
-        queryParameters: {'value': event.value.toString()},
+        '/api/data-management/tables/${event.schemaName}/${event.tableName}/foreign-keys/${event.columnName}',
       );
 
       if (response.statusCode == 200) {
         final data = response.data;
-        final foreignKeyData = List<Map<String, dynamic>>.from(data['data']);
+        final List<Map<String, dynamic>> foreignKeyData =
+            List<Map<String, dynamic>>.from(data['data'] as List);
 
         emit(state.copyWith(
           foreignKeyData: foreignKeyData,
@@ -433,10 +599,10 @@ class DataManagementBloc
     }
   }
 
-  Future<void> _onResetDataManagement(
+  void _onResetDataManagement(
     ResetDataManagement event,
     Emitter<DataManagementState> emit,
-  ) async {
+  ) {
     emit(const DataManagementState.initial());
   }
 }
