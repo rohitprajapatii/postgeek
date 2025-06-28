@@ -70,6 +70,12 @@ class SidebarNavigation extends StatelessWidget {
                   Icons.health_and_safety,
                   '/health',
                 ),
+                _buildNavItem(
+                  context,
+                  'Data Studio',
+                  Icons.table_view,
+                  '/data-management',
+                ),
               ],
             ),
           ),

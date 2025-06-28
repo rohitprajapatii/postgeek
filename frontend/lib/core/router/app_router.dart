@@ -8,6 +8,7 @@ import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/queries/screens/queries_screen.dart';
 import '../../features/activity/screens/activity_screen.dart';
 import '../../features/health/screens/health_screen.dart';
+import '../../features/data_management/screens/data_management_screen.dart';
 import '../widgets/app_scaffold.dart';
 
 class AppRouter {
@@ -66,6 +67,12 @@ class AppRouter {
               path: '/health',
               pageBuilder: (context, state) => const NoTransitionPage(
                 child: HealthScreen(),
+              ),
+            ),
+            GoRoute(
+              path: '/data-management',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: DataManagementScreen(),
               ),
             ),
           ],

@@ -9,6 +9,7 @@ import 'features/dashboard/bloc/dashboard_bloc.dart';
 import 'features/queries/bloc/queries_bloc.dart';
 import 'features/activity/bloc/activity_bloc.dart';
 import 'features/health/bloc/health_bloc.dart';
+import 'features/data_management/bloc/data_management_bloc.dart';
 import 'core/services/api_service.dart';
 
 void main() {
@@ -54,6 +55,12 @@ class PostGeekApp extends StatelessWidget {
           ),
           BlocProvider<HealthBloc>(
             create: (context) => HealthBloc(
+              apiService: context.read<ApiService>(),
+              connectionBloc: context.read<ConnectionBloc>(),
+            ),
+          ),
+          BlocProvider<DataManagementBloc>(
+            create: (context) => DataManagementBloc(
               apiService: context.read<ApiService>(),
               connectionBloc: context.read<ConnectionBloc>(),
             ),
