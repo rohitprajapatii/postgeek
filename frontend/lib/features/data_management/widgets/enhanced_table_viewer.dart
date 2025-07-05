@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../models/table_tab.dart';
 import '../models/table_details.dart';
 import '../models/table_data.dart';
+import '../bloc/data_management_bloc.dart';
 
 class EnhancedTableViewer extends StatelessWidget {
   final TableTab tab;
@@ -389,10 +391,10 @@ class EnhancedTableViewer extends StatelessWidget {
             rows: tableData.data.map((row) {
               return DataRow(
                 cells: tableDetails.columns.map((column) {
-                  final value = row[column.columnName];
+                  final value = row.data[column.columnName];
                   return DataCell(
-                    _buildCellContent(value, column),
-                    onTap: () => _copyCellValue(context, value),
+                    _buildCellContent(value, column, row),
+                    onTap: () => _handleCellTap(context, value, column, row),
                   );
                 }).toList(),
               );
@@ -403,7 +405,8 @@ class EnhancedTableViewer extends StatelessWidget {
     );
   }
 
-  Widget _buildCellContent(dynamic value, ColumnInfo column) {
+  Widget _buildCellContent(
+      dynamic value, ColumnInfo column, EnhancedTableRow row) {
     if (value == null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -428,7 +431,13 @@ class EnhancedTableViewer extends StatelessWidget {
     }
 
     Color? textColor;
-    if (column.dataType.toLowerCase().contains('bool')) {
+    bool isClickable = false;
+
+    // Check if this is a foreign key column with relation data
+    if (column.isForeignKey && row.relations.containsKey(column.columnName)) {
+      textColor = AppColors.info;
+      isClickable = true;
+    } else if (column.dataType.toLowerCase().contains('bool')) {
       textColor = value == true ? AppColors.success : AppColors.error;
     } else if (column.dataType.toLowerCase().contains('int') ||
         column.dataType.toLowerCase().contains('num') ||
@@ -436,14 +445,54 @@ class EnhancedTableViewer extends StatelessWidget {
       textColor = AppColors.info;
     }
 
-    return Text(
+    Widget content = Text(
       displayValue,
       style: TextStyle(
         color: textColor ?? AppColors.textSecondary,
         fontSize: 12,
+        decoration: isClickable ? TextDecoration.underline : null,
       ),
       overflow: TextOverflow.ellipsis,
     );
+
+    if (isClickable) {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.link,
+            size: 12,
+            color: AppColors.info,
+          ),
+          const SizedBox(width: 4),
+          Flexible(child: content),
+        ],
+      );
+    }
+
+    return content;
+  }
+
+  void _handleCellTap(BuildContext context, dynamic value, ColumnInfo column, EnhancedTableRow row) {
+    // If it's a foreign key column with relation data, open the relation tab
+    if (column.isForeignKey && row.relations.containsKey(column.columnName)) {
+      final relationData = row.relations[column.columnName]!;
+      
+      // Import the BLoC and its events
+      final bloc = context.read<DataManagementBloc>();
+      bloc.add(OpenRelationTab(
+        sourceSchema: tab.schemaName,
+        sourceTable: tab.tableName,
+        sourceColumn: column.columnName,
+        relationValue: value.toString(),
+        targetSchema: relationData.referencedSchema,
+        targetTable: relationData.referencedTable,
+        targetColumn: relationData.referencedColumn,
+      ));
+    } else {
+      // Default behavior - copy to clipboard
+      _copyCellValue(context, value);
+    }
   }
 
   void _copyCellValue(BuildContext context, dynamic value) {

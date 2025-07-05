@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 class PaginatedTableData extends Equatable {
-  final List<Map<String, dynamic>> data;
+  final List<EnhancedTableRow> data;
   final PaginationInfo pagination;
 
   const PaginatedTableData({
@@ -11,7 +11,9 @@ class PaginatedTableData extends Equatable {
 
   factory PaginatedTableData.fromJson(Map<String, dynamic> json) {
     return PaginatedTableData(
-      data: List<Map<String, dynamic>>.from(json['data'] as List? ?? []),
+      data: (json['data'] as List? ?? [])
+          .map((row) => EnhancedTableRow.fromJson(row))
+          .toList(),
       pagination: PaginationInfo.fromJson(json['pagination'] ?? {}),
     );
   }
@@ -185,4 +187,72 @@ class QueryField extends Equatable {
 
   @override
   List<Object?> get props => [name, dataTypeID, dataType];
+}
+
+class RelationData extends Equatable {
+  final String columnName;
+  final String referencedTable;
+  final String referencedColumn;
+  final String referencedSchema;
+  final List<Map<String, dynamic>> relatedRecords;
+
+  const RelationData({
+    required this.columnName,
+    required this.referencedTable,
+    required this.referencedColumn,
+    required this.referencedSchema,
+    required this.relatedRecords,
+  });
+
+  factory RelationData.fromJson(Map<String, dynamic> json) {
+    return RelationData(
+      columnName: json['columnName'] as String,
+      referencedTable: json['referencedTable'] as String,
+      referencedColumn: json['referencedColumn'] as String,
+      referencedSchema: json['referencedSchema'] as String,
+      relatedRecords: List<Map<String, dynamic>>.from(
+        json['relatedRecords'] as List? ?? [],
+      ),
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        columnName,
+        referencedTable,
+        referencedColumn,
+        referencedSchema,
+        relatedRecords,
+      ];
+}
+
+class EnhancedTableRow extends Equatable {
+  final Map<String, dynamic> data;
+  final Map<String, RelationData> relations;
+
+  const EnhancedTableRow({
+    required this.data,
+    required this.relations,
+  });
+
+  factory EnhancedTableRow.fromJson(Map<String, dynamic> json) {
+    final relations = <String, RelationData>{};
+    final relationsJson = json['_relations'] as Map<String, dynamic>? ?? {};
+
+    for (final entry in relationsJson.entries) {
+      relations[entry.key] = RelationData.fromJson(entry.value);
+    }
+
+    // Remove _relations from data to avoid duplication
+    final data = Map<String, dynamic>.from(json);
+    data.remove('_relations');
+
+    return EnhancedTableRow(
+      data: data,
+      relations: relations,
+    );
+  }
+
+  @override
+  List<Object?> get props => [data, relations];
 }

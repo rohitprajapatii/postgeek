@@ -36,6 +36,8 @@ class DataManagementBloc
     on<ExecuteQuery>(_onExecuteQuery);
     on<ExportTableData>(_onExportTableData);
     on<LoadForeignKeyData>(_onLoadForeignKeyData);
+    on<OpenRelationTab>(_onOpenRelationTab);
+    on<LoadRelationData>(_onLoadRelationData);
     on<ResetDataManagement>(_onResetDataManagement);
   }
 
@@ -594,6 +596,113 @@ class DataManagementBloc
       }
     } catch (e) {
       emit(state.copyWith(
+        errorMessage: e.toString(),
+      ));
+    }
+  }
+
+  // Relation Navigation Event Handlers
+  Future<void> _onOpenRelationTab(
+    OpenRelationTab event,
+    Emitter<DataManagementState> emit,
+  ) async {
+    final tabId =
+        '${event.targetSchema}.${event.targetTable}@${event.relationValue}';
+
+    // Check if tab is already open
+    final existingTabIndex =
+        state.openTabs.indexWhere((tab) => tab.id == tabId);
+
+    if (existingTabIndex != -1) {
+      // Tab already exists, just switch to it
+      emit(state.copyWith(activeTabId: tabId));
+      return;
+    }
+
+    // Create new tab for relation
+    final newTab = TableTab(
+      id: tabId,
+      displayName: '${event.targetTable} (${event.relationValue})',
+      schemaName: event.targetSchema,
+      tableName: event.targetTable,
+      isLoading: true,
+    );
+
+    final updatedTabs = List<TableTab>.from(state.openTabs)..add(newTab);
+
+    emit(state.copyWith(
+      openTabs: updatedTabs,
+      activeTabId: tabId,
+    ));
+
+    // Load relation data
+    try {
+      final response = await apiService.get(
+        '/api/data-management/tables/${event.sourceSchema}/${event.sourceTable}/relations/${event.sourceColumn}/${event.relationValue}',
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final relatedTableData = PaginatedTableData.fromJson(data);
+
+        // Also get table details for the related table
+        final detailsResponse = await apiService.get(
+          '/api/data-management/tables/${event.targetSchema}/${event.targetTable}/info',
+        );
+
+        if (detailsResponse.statusCode == 200) {
+          final tableDetails =
+              TableDetails.fromJson(detailsResponse.data['data']);
+
+          final updatedTab = newTab.copyWith(
+            isLoading: false,
+            tableDetails: tableDetails,
+            tableData: relatedTableData,
+          );
+
+          final finalTabs = state.openTabs
+              .map((tab) => tab.id == tabId ? updatedTab : tab)
+              .toList();
+
+          emit(state.copyWith(openTabs: finalTabs));
+        }
+      }
+    } catch (e) {
+      // Handle error - update tab with error state
+      final errorTab = newTab.copyWith(
+        isLoading: false,
+        errorMessage: e.toString(),
+      );
+
+      final finalTabs = state.openTabs
+          .map((tab) => tab.id == tabId ? errorTab : tab)
+          .toList();
+
+      emit(state.copyWith(openTabs: finalTabs));
+    }
+  }
+
+  Future<void> _onLoadRelationData(
+    LoadRelationData event,
+    Emitter<DataManagementState> emit,
+  ) async {
+    try {
+      final response = await apiService.get(
+        '/api/data-management/tables/${event.sourceSchema}/${event.sourceTable}/relations/${event.sourceColumn}/${event.relationValue}',
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final relatedTableData = PaginatedTableData.fromJson(data);
+
+        emit(state.copyWith(
+          tableData: relatedTableData,
+          status: DataManagementStatus.loaded,
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        status: DataManagementStatus.error,
         errorMessage: e.toString(),
       ));
     }

@@ -49,6 +49,19 @@ export interface SchemaInfo {
   }[];
 }
 
+export interface RelationData {
+  columnName: string;
+  referencedTable: string;
+  referencedColumn: string;
+  referencedSchema: string;
+  relatedRecords: any[];
+}
+
+export interface EnhancedTableRow {
+  [key: string]: any;
+  _relations?: { [columnName: string]: RelationData };
+}
+
 export interface QueryResult {
   rows: any[];
   fields: {

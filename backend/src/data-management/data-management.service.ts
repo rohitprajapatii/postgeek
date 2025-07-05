@@ -183,8 +183,50 @@ export class DataManagementService {
 
     const dataResult = await this.databaseService.query(dataQuery, queryParams);
 
+    // Get table info to identify foreign key columns
+    const tableInfo = await this.getTableInfo(schemaName, tableName);
+    const foreignKeyColumns = tableInfo.columns.filter(col => col.isForeignKey && col.references);
+
+    // Enhance data with relation information
+    const enhancedData = await Promise.all(
+      dataResult.rows.map(async (row) => {
+        const relations: { [columnName: string]: any } = {};
+        
+        // For each foreign key column, fetch related data
+        for (const column of foreignKeyColumns) {
+          const foreignKeyValue = row[column.columnName];
+          if (foreignKeyValue != null && column.references) {
+            try {
+              const relatedData = await this.getForeignKeyData(
+                column.references.schema,
+                column.references.table,
+                column.references.column,
+                foreignKeyValue
+              );
+              
+              relations[column.columnName] = {
+                columnName: column.columnName,
+                referencedTable: column.references.table,
+                referencedColumn: column.references.column,
+                referencedSchema: column.references.schema,
+                relatedRecords: relatedData,
+              };
+            } catch (error) {
+              // If there's an error fetching related data, just skip it
+              console.warn(`Failed to fetch related data for ${column.columnName}:`, error);
+            }
+          }
+        }
+        
+        return {
+          ...row,
+          _relations: relations,
+        };
+      })
+    );
+
     return {
-      data: dataResult.rows,
+      data: enhancedData,
       pagination: {
         page,
         limit,

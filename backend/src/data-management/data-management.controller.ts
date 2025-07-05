@@ -493,4 +493,78 @@ export class DataManagementController {
       );
     }
   }
+
+  /**
+   * Get related table data for a foreign key relation
+   */
+  @Get("tables/:schema/:table/relations/:column/:value")
+  async getRelatedTableData(
+    @Param("schema") schema: string,
+    @Param("table") table: string,
+    @Param("column") column: string,
+    @Param("value") value: string,
+    @Query() queryOptions: TableQueryDto
+  ) {
+    console.log(
+      `[DataManagementController] GET /data-management/tables/${schema}/${table}/relations/${column}/${value}`
+    );
+
+    try {
+      // Get table info to find the foreign key reference
+      const tableInfo = await this.dataManagementService.getTableInfo(
+        schema,
+        table
+      );
+      
+      const foreignKeyColumn = tableInfo.columns.find(
+        col => col.columnName === column && col.isForeignKey && col.references
+      );
+
+      if (!foreignKeyColumn || !foreignKeyColumn.references) {
+        throw new HttpException(
+          `Column ${column} is not a foreign key`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      // Get the related table data
+      const relatedTableData = await this.dataManagementService.getTableData(
+        foreignKeyColumn.references.schema,
+        foreignKeyColumn.references.table,
+        {
+          ...queryOptions,
+          filters: [
+            {
+              column: foreignKeyColumn.references.column,
+              operator: "=",
+              value: value,
+            },
+          ],
+        }
+      );
+
+      return {
+        success: true,
+        data: relatedTableData.data,
+        pagination: relatedTableData.pagination,
+        relationInfo: {
+          sourceSchema: schema,
+          sourceTable: table,
+          sourceColumn: column,
+          targetSchema: foreignKeyColumn.references.schema,
+          targetTable: foreignKeyColumn.references.table,
+          targetColumn: foreignKeyColumn.references.column,
+        },
+      };
+    } catch (error) {
+      console.error(
+        "[DataManagementController] Error fetching related table data:",
+        error
+      );
+      throw new HttpException(
+        "Failed to fetch related table data",
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 }
