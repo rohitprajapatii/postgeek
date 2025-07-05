@@ -26,16 +26,30 @@ export class DataManagementService {
   constructor(private readonly databaseService: DatabaseService) {}
 
   /**
-   * Check if database is connected
+   * Check if database connection is available
    */
   private checkConnection(): void {
     const status = this.databaseService.getConnectionStatus();
     if (!status.isConnected) {
       throw new HttpException(
-        "Database not connected. Please establish a connection first.",
-        HttpStatus.BAD_REQUEST
+        "Database connection is not available",
+        HttpStatus.SERVICE_UNAVAILABLE
       );
     }
+  }
+
+  /**
+   * Quote PostgreSQL identifier (table name, column name, etc.) to preserve case sensitivity
+   */
+  private quoteIdentifier(identifier: string): string {
+    return `"${identifier.replace(/"/g, '""')}"`;
+  }
+
+  /**
+   * Build a qualified table name with proper quoting
+   */
+  private getQualifiedTableName(schemaName: string, tableName: string): string {
+    return `${this.quoteIdentifier(schemaName)}.${this.quoteIdentifier(tableName)}`;
   }
 
   /**
@@ -129,7 +143,7 @@ export class DataManagementService {
       const conditions = filters.map((filter, index) => {
         const paramIndex = queryParams.length + 1;
         queryParams.push(this.formatFilterValue(filter));
-        return `${filter.column} ${filter.operator} $${paramIndex}`;
+        return `${this.quoteIdentifier(filter.column)} ${filter.operator} $${paramIndex}`;
       });
       whereClause = `WHERE ${conditions.join(" AND ")}`;
     }
@@ -137,13 +151,18 @@ export class DataManagementService {
     // Build ORDER BY clause
     let orderClause = "";
     if (sortBy) {
-      orderClause = `ORDER BY ${sortBy} ${sortOrder}`;
+      orderClause = `ORDER BY ${this.quoteIdentifier(sortBy)} ${sortOrder}`;
     }
+
+    const qualifiedTableName = this.getQualifiedTableName(
+      schemaName,
+      tableName
+    );
 
     // Get total count
     const countQuery = `
       SELECT COUNT(*) as total 
-      FROM ${schemaName}.${tableName} 
+      FROM ${qualifiedTableName} 
       ${whereClause}
     `;
     const countResult = await this.databaseService.query(
@@ -155,7 +174,7 @@ export class DataManagementService {
     // Get paginated data
     const dataQuery = `
       SELECT * 
-      FROM ${schemaName}.${tableName} 
+      FROM ${qualifiedTableName} 
       ${whereClause}
       ${orderClause}
       LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
@@ -188,9 +207,16 @@ export class DataManagementService {
     const columns = Object.keys(data);
     const values = Object.values(data);
     const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
+    const quotedColumns = columns
+      .map((col) => this.quoteIdentifier(col))
+      .join(", ");
+    const qualifiedTableName = this.getQualifiedTableName(
+      schemaName,
+      tableName
+    );
 
     const query = `
-      INSERT INTO ${schemaName}.${tableName} (${columns.join(", ")})
+      INSERT INTO ${qualifiedTableName} (${quotedColumns})
       VALUES (${placeholders})
       RETURNING *
     `;
@@ -211,17 +237,24 @@ export class DataManagementService {
     const { data, where } = updateDto;
 
     const setClause = Object.keys(data)
-      .map((key, index) => `${key} = $${index + 1}`)
+      .map((key, index) => `${this.quoteIdentifier(key)} = $${index + 1}`)
       .join(", ");
 
     const whereConditions = Object.keys(where)
-      .map((key, index) => `${key} = $${Object.keys(data).length + index + 1}`)
+      .map(
+        (key, index) =>
+          `${this.quoteIdentifier(key)} = $${Object.keys(data).length + index + 1}`
+      )
       .join(" AND ");
 
     const values = [...Object.values(data), ...Object.values(where)];
+    const qualifiedTableName = this.getQualifiedTableName(
+      schemaName,
+      tableName
+    );
 
     const query = `
-      UPDATE ${schemaName}.${tableName}
+      UPDATE ${qualifiedTableName}
       SET ${setClause}
       WHERE ${whereConditions}
       RETURNING *
@@ -242,13 +275,17 @@ export class DataManagementService {
     const { where } = deleteDto;
 
     const whereConditions = Object.keys(where)
-      .map((key, index) => `${key} = $${index + 1}`)
+      .map((key, index) => `${this.quoteIdentifier(key)} = $${index + 1}`)
       .join(" AND ");
 
     const values = Object.values(where);
+    const qualifiedTableName = this.getQualifiedTableName(
+      schemaName,
+      tableName
+    );
 
     const query = `
-      DELETE FROM ${schemaName}.${tableName}
+      DELETE FROM ${qualifiedTableName}
       WHERE ${whereConditions}
     `;
 
@@ -287,16 +324,27 @@ export class DataManagementService {
           .map((_, index) => `$${index + 1}`)
           .join(", ");
 
+        const quotedColumns = columns.map((col) => this.quoteIdentifier(col));
+        const qualifiedTableName = this.getQualifiedTableName(
+          schemaName,
+          tableName
+        );
+
         let query: string;
         if (upsert && tableInfo.primaryKeys.length > 0) {
-          const conflictColumns = tableInfo.primaryKeys.join(", ");
+          const conflictColumns = tableInfo.primaryKeys
+            .map((key) => this.quoteIdentifier(key))
+            .join(", ");
           const updateClause = columns
             .filter((col) => !tableInfo.primaryKeys.includes(col))
-            .map((col) => `${col} = EXCLUDED.${col}`)
+            .map(
+              (col) =>
+                `${this.quoteIdentifier(col)} = EXCLUDED.${this.quoteIdentifier(col)}`
+            )
             .join(", ");
 
           query = `
-            INSERT INTO ${schemaName}.${tableName} (${columns.join(", ")})
+            INSERT INTO ${qualifiedTableName} (${quotedColumns.join(", ")})
             VALUES (${placeholders})
             ON CONFLICT (${conflictColumns})
             DO UPDATE SET ${updateClause}
@@ -304,7 +352,7 @@ export class DataManagementService {
           `;
         } else {
           query = `
-            INSERT INTO ${schemaName}.${tableName} (${columns.join(", ")})
+            INSERT INTO ${qualifiedTableName} (${quotedColumns.join(", ")})
             VALUES (${placeholders})
             RETURNING *
           `;
@@ -366,9 +414,15 @@ export class DataManagementService {
     referencedColumn: string,
     value: any
   ): Promise<any[]> {
+    const qualifiedTableName = this.getQualifiedTableName(
+      referencedSchema,
+      referencedTable
+    );
+    const quotedColumn = this.quoteIdentifier(referencedColumn);
+
     const query = `
-      SELECT * FROM ${referencedSchema}.${referencedTable}
-      WHERE ${referencedColumn} = $1
+      SELECT * FROM ${qualifiedTableName}
+      WHERE ${quotedColumn} = $1
       LIMIT 10
     `;
 
@@ -392,12 +446,16 @@ export class DataManagementService {
       const conditions = filters.map((filter, index) => {
         const paramIndex = queryParams.length + 1;
         queryParams.push(this.formatFilterValue(filter));
-        return `${filter.column} ${filter.operator} $${paramIndex}`;
+        return `${this.quoteIdentifier(filter.column)} ${filter.operator} $${paramIndex}`;
       });
       whereClause = `WHERE ${conditions.join(" AND ")}`;
     }
 
-    const query = `SELECT * FROM ${schemaName}.${tableName} ${whereClause}`;
+    const qualifiedTableName = this.getQualifiedTableName(
+      schemaName,
+      tableName
+    );
+    const query = `SELECT * FROM ${qualifiedTableName} ${whereClause}`;
     const result = await this.databaseService.query(query, queryParams);
 
     if (format === "json") {
