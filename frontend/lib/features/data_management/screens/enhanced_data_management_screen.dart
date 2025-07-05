@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/app_scaffold.dart';
 import '../../connection/bloc/connection_bloc.dart' as connection_bloc;
 import '../bloc/data_management_bloc.dart';
 import '../widgets/enhanced_schema_browser.dart';
@@ -37,56 +36,54 @@ class _EnhancedDataManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      child: BlocListener<connection_bloc.ConnectionBloc,
-          connection_bloc.ConnectionState>(
-        listener: (context, connectionState) {
-          if (connectionState.status ==
-              connection_bloc.ConnectionStatus.disconnected) {
-            context.go('/connection');
-          } else if (connectionState.status ==
-              connection_bloc.ConnectionStatus.connected) {
-            context.read<DataManagementBloc>().add(const LoadSchemas());
-          }
-        },
-        child: Scaffold(
-          backgroundColor: AppColors.background,
-          body: Column(
-            children: [
-              // Header with global search and connection status
-              _buildHeader(),
+    return BlocListener<connection_bloc.ConnectionBloc,
+        connection_bloc.ConnectionState>(
+      listener: (context, connectionState) {
+        if (connectionState.status ==
+            connection_bloc.ConnectionStatus.disconnected) {
+          context.go('/connection');
+        } else if (connectionState.status ==
+            connection_bloc.ConnectionStatus.connected) {
+          context.read<DataManagementBloc>().add(const LoadSchemas());
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Column(
+          children: [
+            // Header with global search and connection status
+            _buildHeader(),
 
-              // Tab bar for open tables
-              _buildTabBar(),
+            // Tab bar for open tables
+            _buildTabBar(),
 
-              // Main content area
-              Expanded(
-                child: Row(
-                  children: [
-                    // Left sidebar - Schema Browser
-                    Container(
-                      width: 280,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        border: Border(
-                          right: BorderSide(
-                            color: AppColors.border,
-                            width: 1,
-                          ),
+            // Main content area
+            Expanded(
+              child: Row(
+                children: [
+                  // Left sidebar - Schema Browser
+                  Container(
+                    width: 280,
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border(
+                        right: BorderSide(
+                          color: AppColors.border,
+                          width: 1,
                         ),
                       ),
-                      child: const EnhancedSchemaBrowser(),
                     ),
+                    child: const EnhancedSchemaBrowser(),
+                  ),
 
-                    // Main content - Table viewers
-                    Expanded(
-                      child: _buildMainContent(),
-                    ),
-                  ],
-                ),
+                  // Main content - Table viewers
+                  Expanded(
+                    child: _buildMainContent(),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -96,7 +93,7 @@ class _EnhancedDataManagementScreenState
     return Container(
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.surface,
         border: Border(
           bottom: BorderSide(
@@ -116,14 +113,14 @@ class _EnhancedDataManagementScreenState
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.storage,
                   color: AppColors.primary,
                   size: 20,
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
+              const Text(
                 'PostGeek Studio',
                 style: TextStyle(
                   fontSize: 18,
@@ -212,7 +209,7 @@ class _EnhancedDataManagementScreenState
               onPressed: () {
                 context.read<DataManagementBloc>().add(const LoadSchemas());
               },
-              icon: Icon(
+              icon: const Icon(
                 Icons.refresh,
                 color: AppColors.textSecondary,
                 size: 20,
@@ -239,7 +236,7 @@ class _EnhancedDataManagementScreenState
 
         return Container(
           height: 40,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.surface,
             border: Border(
               bottom: BorderSide(
@@ -309,14 +306,14 @@ class _EnhancedDataManagementScreenState
                   width: 1,
                 ),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.table_view_outlined,
                 size: 48,
                 color: AppColors.textTertiary,
               ),
             ),
             const SizedBox(height: 24),
-            Text(
+            const Text(
               'Welcome to PostGeek Studio',
               style: TextStyle(
                 fontSize: 24,
@@ -325,7 +322,7 @@ class _EnhancedDataManagementScreenState
               ),
             ),
             const SizedBox(height: 8),
-            Text(
+            const Text(
               'Select a table from the sidebar to start exploring your data',
               style: TextStyle(
                 fontSize: 16,
@@ -342,7 +339,7 @@ class _EnhancedDataManagementScreenState
                   color: AppColors.primary.withOpacity(0.3),
                 ),
               ),
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
@@ -350,7 +347,7 @@ class _EnhancedDataManagementScreenState
                     size: 16,
                     color: AppColors.primary,
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Text(
                     'Tip: Use Cmd+K to quickly search for tables',
                     style: TextStyle(

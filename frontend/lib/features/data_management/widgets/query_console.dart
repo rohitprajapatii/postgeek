@@ -104,7 +104,7 @@ class _QueryConsoleState extends State<QueryConsole> {
                   Expanded(
                     child: BlocBuilder<DataManagementBloc, DataManagementState>(
                       builder: (context, state) {
-                        if (state.isExecutingQuery) {
+                        if (state.status == DataManagementStatus.loading) {
                           return const Center(
                             child: CircularProgressIndicator(),
                           );
@@ -244,11 +244,6 @@ class _QueryConsoleState extends State<QueryConsole> {
       return;
     }
 
-    context.read<DataManagementBloc>().add(
-          ExecuteQuery(
-            query: query,
-            readonly: _isReadonly,
-          ),
-        );
+    // context.read<DataManagementBloc>().add(ExecuteQuery(query, _isReadonly));
   }
 }

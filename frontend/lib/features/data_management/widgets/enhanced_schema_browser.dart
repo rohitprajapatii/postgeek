@@ -23,14 +23,14 @@ class EnhancedSchemaBrowser extends StatelessWidget {
               ),
             ),
           ),
-          child: Row(
+          child: const Row(
             children: [
               Icon(
                 Icons.folder_outlined,
                 color: AppColors.textSecondary,
                 size: 18,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(
                 'Schema Explorer',
                 style: TextStyle(
@@ -79,13 +79,13 @@ class EnhancedSchemaBrowser extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          const Icon(
             Icons.folder_off_outlined,
             size: 32,
             color: AppColors.textTertiary,
           ),
           const SizedBox(height: 16),
-          Text(
+          const Text(
             'No schemas found',
             style: TextStyle(
               fontSize: 14,
@@ -94,7 +94,7 @@ class EnhancedSchemaBrowser extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
+          const Text(
             'Check your connection and try refreshing',
             style: TextStyle(
               fontSize: 12,
@@ -107,11 +107,11 @@ class EnhancedSchemaBrowser extends StatelessWidget {
             onPressed: () {
               context.read<DataManagementBloc>().add(const LoadSchemas());
             },
-            icon: Icon(Icons.refresh, size: 16),
-            label: Text('Refresh'),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Refresh'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.textSecondary,
-              side: BorderSide(color: AppColors.border),
+              side: const BorderSide(color: AppColors.border),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
           ),
@@ -146,12 +146,11 @@ class _SchemaExpansionTileState extends State<_SchemaExpansionTile> {
       child: Theme(
         data: Theme.of(context).copyWith(
           dividerColor: Colors.transparent,
-          expansionTileTheme: ExpansionTileThemeData(
+          expansionTileTheme: const ExpansionTileThemeData(
             backgroundColor: Colors.transparent,
             collapsedBackgroundColor: Colors.transparent,
-            tilePadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            childrenPadding: const EdgeInsets.only(left: 8, bottom: 4),
+            tilePadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            childrenPadding: EdgeInsets.only(left: 8, bottom: 4),
           ),
         ),
         child: ExpansionTile(
@@ -162,7 +161,7 @@ class _SchemaExpansionTileState extends State<_SchemaExpansionTile> {
           ),
           title: Text(
             widget.schema.schemaName,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
               color: AppColors.textPrimary,
@@ -170,7 +169,7 @@ class _SchemaExpansionTileState extends State<_SchemaExpansionTile> {
           ),
           subtitle: Text(
             '${widget.schema.tables.length} tables',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 11,
               color: AppColors.textTertiary,
             ),
@@ -236,7 +235,7 @@ class _TableListTileState extends State<_TableListTile> {
               color: AppColors.accent.withOpacity(0.1),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.table_view,
               size: 14,
               color: AppColors.accent,
@@ -252,7 +251,7 @@ class _TableListTileState extends State<_TableListTile> {
           ),
           subtitle: Text(
             '${widget.table.rowCount} rows',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 10,
               color: AppColors.textTertiary,
             ),
