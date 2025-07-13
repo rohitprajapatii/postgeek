@@ -12,6 +12,8 @@ class TableTab extends Equatable {
   final TableDetails? tableDetails;
   final PaginatedTableData? tableData;
   final String? errorMessage;
+  final String searchFilter;
+  final PaginatedTableData? filteredTableData;
 
   const TableTab({
     required this.id,
@@ -23,6 +25,8 @@ class TableTab extends Equatable {
     this.tableDetails,
     this.tableData,
     this.errorMessage,
+    this.searchFilter = '',
+    this.filteredTableData,
   });
 
   String get fullTableName => '$schemaName.$tableName';
@@ -37,6 +41,9 @@ class TableTab extends Equatable {
     TableDetails? tableDetails,
     PaginatedTableData? tableData,
     String? errorMessage,
+    String? searchFilter,
+    PaginatedTableData? filteredTableData,
+    bool clearFilteredTableData = false,
   }) {
     return TableTab(
       id: id ?? this.id,
@@ -48,6 +55,10 @@ class TableTab extends Equatable {
       tableDetails: tableDetails ?? this.tableDetails,
       tableData: tableData ?? this.tableData,
       errorMessage: errorMessage ?? this.errorMessage,
+      searchFilter: searchFilter ?? this.searchFilter,
+      filteredTableData: clearFilteredTableData
+          ? null
+          : (filteredTableData ?? this.filteredTableData),
     );
   }
 
@@ -62,5 +73,7 @@ class TableTab extends Equatable {
         tableDetails,
         tableData,
         errorMessage,
+        searchFilter,
+        filteredTableData,
       ];
 }

@@ -300,6 +300,29 @@ class CloseReverseRelationDialog extends DataManagementEvent {
   const CloseReverseRelationDialog();
 }
 
+// Search Events
+class SearchTableData extends DataManagementEvent {
+  final String tabId;
+  final String searchText;
+
+  const SearchTableData({
+    required this.tabId,
+    required this.searchText,
+  });
+
+  @override
+  List<Object> get props => [tabId, searchText];
+}
+
+class ClearTableSearch extends DataManagementEvent {
+  final String tabId;
+
+  const ClearTableSearch(this.tabId);
+
+  @override
+  List<Object> get props => [tabId];
+}
+
 // Reset Events
 class ResetDataManagement extends DataManagementEvent {
   const ResetDataManagement();

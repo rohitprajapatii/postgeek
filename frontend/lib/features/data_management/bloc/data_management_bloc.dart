@@ -40,6 +40,8 @@ class DataManagementBloc
     on<LoadRelationData>(_onLoadRelationData);
     on<OpenReverseRelationDialog>(_onOpenReverseRelationDialog);
     on<CloseReverseRelationDialog>(_onCloseReverseRelationDialog);
+    on<SearchTableData>(_onSearchTableData);
+    on<ClearTableSearch>(_onClearTableSearch);
     on<ResetDataManagement>(_onResetDataManagement);
   }
 
@@ -828,7 +830,7 @@ class DataManagementBloc
         ));
       }
     } catch (e) {
-              // print('[DataManagementBloc] ❌ Exception: $e');
+      // print('[DataManagementBloc] ❌ Exception: $e');
       emit(state.copyWith(
         isLoadingReverseRelation: false,
         errorMessage: e.toString(),
@@ -845,5 +847,76 @@ class DataManagementBloc
       reverseRelationData: null,
       isLoadingReverseRelation: false,
     ));
+  }
+
+  void _onSearchTableData(
+    SearchTableData event,
+    Emitter<DataManagementState> emit,
+  ) {
+    final tabIndex = state.openTabs.indexWhere((tab) => tab.id == event.tabId);
+    if (tabIndex == -1) return;
+
+    final tab = state.openTabs[tabIndex];
+    if (tab.tableData == null) return;
+
+    // If search text is empty, clear the filter
+    if (event.searchText.trim().isEmpty) {
+      final updatedTab = tab.copyWith(
+        searchFilter: '',
+        filteredTableData: null,
+      );
+      final updatedTabs = List<TableTab>.from(state.openTabs);
+      updatedTabs[tabIndex] = updatedTab;
+      emit(state.copyWith(openTabs: updatedTabs));
+      return;
+    }
+
+    // Filter the table data based on search text
+    final searchText = event.searchText.toLowerCase().trim();
+    final filteredRows = tab.tableData!.data.where((row) {
+      // Search through all data values in the row
+      return row.data.values.any((value) {
+        if (value == null) return false;
+        return value.toString().toLowerCase().contains(searchText);
+      });
+    }).toList();
+
+    // Create filtered table data
+    final filteredTableData = PaginatedTableData(
+      data: filteredRows,
+      pagination: PaginationInfo(
+        page: 1,
+        limit: filteredRows.length,
+        total: filteredRows.length,
+        totalPages: 1,
+      ),
+    );
+
+    final updatedTab = tab.copyWith(
+      searchFilter: event.searchText,
+      filteredTableData: filteredTableData,
+    );
+
+    final updatedTabs = List<TableTab>.from(state.openTabs);
+    updatedTabs[tabIndex] = updatedTab;
+    emit(state.copyWith(openTabs: updatedTabs));
+  }
+
+  void _onClearTableSearch(
+    ClearTableSearch event,
+    Emitter<DataManagementState> emit,
+  ) {
+    final tabIndex = state.openTabs.indexWhere((tab) => tab.id == event.tabId);
+    if (tabIndex == -1) return;
+
+    final tab = state.openTabs[tabIndex];
+    final updatedTab = tab.copyWith(
+      searchFilter: '',
+      clearFilteredTableData: true,
+    );
+
+    final updatedTabs = List<TableTab>.from(state.openTabs);
+    updatedTabs[tabIndex] = updatedTab;
+    emit(state.copyWith(openTabs: updatedTabs));
   }
 }

@@ -8,7 +8,7 @@ import '../models/table_details.dart';
 import '../models/table_data.dart';
 import '../bloc/data_management_bloc.dart';
 
-class EnhancedTableViewer extends StatelessWidget {
+class EnhancedTableViewer extends StatefulWidget {
   final TableTab tab;
   final VoidCallback onRefresh;
 
@@ -19,16 +19,90 @@ class EnhancedTableViewer extends StatelessWidget {
   });
 
   @override
+  State<EnhancedTableViewer> createState() => _EnhancedTableViewerState();
+}
+
+class _EnhancedTableViewerState extends State<EnhancedTableViewer> {
+  late TextEditingController _searchController;
+  late FocusNode _searchFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: widget.tab.searchFilter);
+    _searchFocusNode = FocusNode();
+    _searchController.addListener(_onSearchTextChanged);
+  }
+
+  void _onSearchTextChanged() {
+    // Check if the text is empty and clear search if so
+    if (_searchController.text.trim().isEmpty) {
+      context.read<DataManagementBloc>().add(
+            ClearTableSearch(widget.tab.id),
+          );
+    }
+    // This will rebuild the widget to show/hide the clear button
+    setState(() {});
+  }
+
+  void _handleSearch(String value) {
+    final trimmedValue = value.trim();
+    if (trimmedValue.isEmpty) {
+      context.read<DataManagementBloc>().add(
+            ClearTableSearch(widget.tab.id),
+          );
+    } else {
+      context.read<DataManagementBloc>().add(
+            SearchTableData(
+              tabId: widget.tab.id,
+              searchText: trimmedValue,
+            ),
+          );
+    }
+    // Keep focus on the search field after submission
+    _searchFocusNode.requestFocus();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    context.read<DataManagementBloc>().add(
+          ClearTableSearch(widget.tab.id),
+        );
+    // Force a rebuild to ensure the UI updates
+    setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(EnhancedTableViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update search controller if tab changes or search filter changes
+    if (oldWidget.tab.id != widget.tab.id ||
+        oldWidget.tab.searchFilter != widget.tab.searchFilter) {
+      _searchController.text = widget.tab.searchFilter;
+      // Force rebuild to ensure UI reflects the new search state
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchTextChanged);
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (tab.isLoading) {
+    if (widget.tab.isLoading) {
       return _buildLoadingState();
     }
 
-    if (tab.errorMessage != null) {
-      return _buildErrorState(tab.errorMessage!);
+    if (widget.tab.errorMessage != null) {
+      return _buildErrorState(widget.tab.errorMessage!);
     }
 
-    if (tab.tableDetails == null || tab.tableData == null) {
+    if (widget.tab.tableDetails == null || widget.tab.tableData == null) {
       return _buildEmptyState();
     }
 
@@ -55,7 +129,7 @@ class EnhancedTableViewer extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Loading ${tab.displayName}...',
+              'Loading ${widget.tab.displayName}...',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 14,
@@ -91,7 +165,7 @@ class EnhancedTableViewer extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Failed to load ${tab.displayName}',
+              'Failed to load ${widget.tab.displayName}',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -109,7 +183,7 @@ class EnhancedTableViewer extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: onRefresh,
+              onPressed: widget.onRefresh,
               icon: Icon(Icons.refresh, size: 16),
               label: Text('Try Again'),
               style: ElevatedButton.styleFrom(
@@ -124,6 +198,7 @@ class EnhancedTableViewer extends StatelessWidget {
   }
 
   Widget _buildEmptyState() {
+    final isFiltered = widget.tab.filteredTableData != null;
     return Container(
       color: AppColors.background,
       child: Center(
@@ -131,19 +206,29 @@ class EnhancedTableViewer extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.table_view_outlined,
+              isFiltered ? Icons.search_off : Icons.table_view_outlined,
               size: 32,
               color: AppColors.textTertiary,
             ),
             const SizedBox(height: 16),
             Text(
-              'No data available',
+              isFiltered ? 'No results found' : 'No data available',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
             ),
+            if (isFiltered) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Try adjusting your search terms',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -151,8 +236,10 @@ class EnhancedTableViewer extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final tableDetails = tab.tableDetails!;
-    final tableData = tab.tableData!;
+    final tableDetails = widget.tab.tableDetails!;
+    final tableData = widget.tab.filteredTableData ?? widget.tab.tableData!;
+    final totalRows = widget.tab.tableData!.pagination.total;
+    final isFiltered = widget.tab.filteredTableData != null;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -188,7 +275,7 @@ class EnhancedTableViewer extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      tab.fullTableName,
+                      widget.tab.fullTableName,
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -201,9 +288,11 @@ class EnhancedTableViewer extends StatelessWidget {
                 Row(
                   children: [
                     _buildInfoChip(
-                      '${tableData.pagination.total} rows',
+                      isFiltered
+                          ? '${tableData.pagination.total} / $totalRows rows'
+                          : '${tableData.pagination.total} rows',
                       Icons.list_alt,
-                      AppColors.info,
+                      isFiltered ? AppColors.accent : AppColors.info,
                     ),
                     const SizedBox(width: 8),
                     _buildInfoChip(
@@ -219,6 +308,14 @@ class EnhancedTableViewer extends StatelessWidget {
                         AppColors.warning,
                       ),
                     ],
+                    if (isFiltered) ...[
+                      const SizedBox(width: 8),
+                      _buildInfoChip(
+                        'Filtered',
+                        Icons.filter_alt,
+                        AppColors.primary,
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -228,8 +325,77 @@ class EnhancedTableViewer extends StatelessWidget {
           // Actions
           Row(
             children: [
+              // Search bar with button
+              Row(
+                children: [
+                  Container(
+                    width: 250,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.inputBackground,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: AppColors.border,
+                        width: 1,
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      onSubmitted: _handleSearch,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'Search in table...',
+                        hintStyle: TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 12,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          size: 16,
+                          color: AppColors.textTertiary,
+                        ),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                onPressed: _clearSearch,
+                                icon: Icon(
+                                  Icons.clear,
+                                  size: 16,
+                                  color: AppColors.textTertiary,
+                                ),
+                                padding: EdgeInsets.zero,
+                                tooltip: 'Clear search and show all results',
+                              )
+                            : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  // Search button
+                  IconButton(
+                    onPressed: () => _handleSearch(_searchController.text),
+                    icon: Icon(Icons.search, size: 18),
+                    tooltip: 'Search',
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.all(8),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
               IconButton(
-                onPressed: onRefresh,
+                onPressed: widget.onRefresh,
                 icon: Icon(Icons.refresh, size: 18),
                 tooltip: 'Refresh data',
                 style: IconButton.styleFrom(
@@ -291,8 +457,8 @@ class EnhancedTableViewer extends StatelessWidget {
   }
 
   Widget _buildDataTable(BuildContext context) {
-    final tableDetails = tab.tableDetails!;
-    final tableData = tab.tableData!;
+    final tableDetails = widget.tab.tableDetails!;
+    final tableData = widget.tab.filteredTableData ?? widget.tab.tableData!;
 
     if (tableData.data.isEmpty) {
       return Container(
@@ -445,7 +611,7 @@ class EnhancedTableViewer extends StatelessWidget {
                           child: _buildCellContent(value, column, row),
                         ),
                         onTap: () =>
-                            _handleCellTap(context, value, column, row),
+                            _handleCellTap(context, column.columnName, value),
                       );
                     }).toList(),
                     // Reverse Relations cell (always include if column exists)
@@ -535,40 +701,103 @@ class EnhancedTableViewer extends StatelessWidget {
     return content;
   }
 
-  void _handleCellTap(BuildContext context, dynamic value, ColumnInfo column,
-      EnhancedTableRow row) {
-    // If it's a foreign key column with relation data, open the relation tab
-    if (column.isForeignKey && row.relations.containsKey(column.columnName)) {
-      final relationData = row.relations[column.columnName]!;
+  void _handleCellTap(BuildContext context, String columnName, dynamic value) {
+    if (value == null) return;
 
-      // Import the BLoC and its events
-      final bloc = context.read<DataManagementBloc>();
-      bloc.add(OpenRelationTab(
-        sourceSchema: tab.schemaName,
-        sourceTable: tab.tableName,
-        sourceColumn: column.columnName,
-        relationValue: value.toString(),
-        targetSchema: relationData.referencedSchema,
-        targetTable: relationData.referencedTable,
-        targetColumn: relationData.referencedColumn,
-      ));
+    final column = widget.tab.tableDetails!.columns
+        .firstWhere((col) => col.columnName == columnName);
+
+    // If it's a foreign key column with relation data, open the relation widget.tab
+    if (column.isForeignKey && column.references != null) {
+      // Find the relation data for this column
+      // This would typically come from the enhanced widget.tab data
+      context.read<DataManagementBloc>().add(
+            OpenRelationTab(
+              sourceSchema: widget.tab.schemaName,
+              sourceTable: widget.tab.tableName,
+              sourceColumn: columnName,
+              relationValue: value.toString(),
+              targetSchema: column.references!.schema,
+              targetTable: column.references!.table,
+              targetColumn: column.references!.column,
+            ),
+          );
     } else {
-      // Default behavior - copy to clipboard
-      _copyCellValue(context, value);
-    }
-  }
-
-  void _copyCellValue(BuildContext context, dynamic value) {
-    if (value != null) {
-      Clipboard.setData(ClipboardData(text: value.toString()));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Copied to clipboard'),
-          duration: Duration(seconds: 1),
-          backgroundColor: AppColors.success,
+      // For non-foreign key columns, show cell details
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(columnName),
+          content: SingleChildScrollView(
+            child: Text(value.toString()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: value.toString()));
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Copied to clipboard')),
+                );
+              },
+              child: const Text('Copy'),
+            ),
+          ],
         ),
       );
     }
+  }
+
+  void _handleDeleteRecord(BuildContext context, Map<String, dynamic> rowData) {
+    final primaryKeyColumns = widget.tab.tableDetails!.primaryKeys;
+
+    if (primaryKeyColumns.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot delete: No primary key found'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Extract primary key values
+    final primaryKey = <String, dynamic>{};
+    for (final pkColumn in primaryKeyColumns) {
+      primaryKey[pkColumn] = rowData[pkColumn];
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Record'),
+        content: const Text('Are you sure you want to delete this record?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              context.read<DataManagementBloc>().add(
+                    DeleteRecord(
+                      schemaName: widget.tab.schemaName,
+                      tableName: widget.tab.tableName,
+                      primaryKey: primaryKey,
+                    ),
+                  );
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildReverseRelationsCell(
@@ -661,7 +890,7 @@ class EnhancedTableViewer extends StatelessWidget {
         '  referencingColumn: ${reverseRelation.referencingColumn} (${reverseRelation.referencingColumn.runtimeType})');
 
     // Find the primary key value for this row
-    final primaryKeyColumns = tab.tableDetails!.primaryKeys;
+    final primaryKeyColumns = widget.tab.tableDetails!.primaryKeys;
     if (primaryKeyColumns.isEmpty) {
       print('[EnhancedTableViewer] ❌ No primary key columns found');
       return;
@@ -706,8 +935,8 @@ class EnhancedTableViewer extends StatelessWidget {
           value: context.read<DataManagementBloc>(),
           child: ReverseRelationDialogContent(
             reverseRelation: reverseRelation,
-            sourceSchema: tab.schemaName,
-            sourceTable: tab.tableName,
+            sourceSchema: widget.tab.schemaName,
+            sourceTable: widget.tab.tableName,
             referencedColumn: referencedColumn,
             recordId: recordId,
           ),
