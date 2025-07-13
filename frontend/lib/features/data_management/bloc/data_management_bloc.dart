@@ -50,7 +50,7 @@ class DataManagementBloc
     try {
       emit(state.copyWith(status: DataManagementStatus.loading));
 
-      print('[DataManagementBloc] Loading schemas...');
+      // print('[DataManagementBloc] Loading schemas...');
 
       final response = await apiService.get('/api/data-management/schemas');
 
@@ -60,7 +60,7 @@ class DataManagementBloc
             .map((schema) => SchemaInfo.fromJson(schema))
             .toList();
 
-        print('[DataManagementBloc] ✅ Loaded ${schemas.length} schemas');
+        // print('[DataManagementBloc] ✅ Loaded ${schemas.length} schemas');
 
         emit(state.copyWith(
           status: DataManagementStatus.loaded,
@@ -72,8 +72,8 @@ class DataManagementBloc
             ? 'Database not connected. Please establish a connection first.'
             : 'Failed to load schemas';
 
-        print(
-            '[DataManagementBloc] ❌ Error loading schemas: Status ${response.statusCode}');
+        // print(
+        //     '[DataManagementBloc] ❌ Error loading schemas: Status ${response.statusCode}');
 
         emit(state.copyWith(
           status: DataManagementStatus.error,
@@ -81,7 +81,7 @@ class DataManagementBloc
         ));
       }
     } catch (e) {
-      print('[DataManagementBloc] ❌ Error loading schemas: $e');
+      // print('[DataManagementBloc] ❌ Error loading schemas: $e');
 
       // Check if it's a connection error
       String errorMessage = e.toString();
@@ -328,8 +328,33 @@ class DataManagementBloc
     Emitter<DataManagementState> emit,
   ) {
     final updatedTabs = List<TableTab>.from(state.openTabs);
+
+    // Bounds checking to prevent index out of range errors
+    if (event.oldIndex < 0 || event.oldIndex >= updatedTabs.length) {
+      return;
+    }
+
+    int newIndex = event.newIndex;
+    if (newIndex > updatedTabs.length) {
+      newIndex = updatedTabs.length;
+    }
+    if (newIndex < 0) {
+      newIndex = 0;
+    }
+
+    // If trying to move to the same position, do nothing
+    if (event.oldIndex == newIndex) {
+      return;
+    }
+
     final item = updatedTabs.removeAt(event.oldIndex);
-    updatedTabs.insert(event.newIndex, item);
+
+    // Adjust new index if it's beyond the current length after removal
+    if (newIndex > updatedTabs.length) {
+      newIndex = updatedTabs.length;
+    }
+
+    updatedTabs.insert(newIndex, item);
 
     emit(state.copyWith(openTabs: updatedTabs));
   }
@@ -723,12 +748,12 @@ class DataManagementBloc
     Emitter<DataManagementState> emit,
   ) async {
     try {
-      print('[DataManagementBloc] Opening reverse relation dialog...');
-      print(
-          '[DataManagementBloc] Source: ${event.sourceSchema}.${event.sourceTable}');
-      print(
-          '[DataManagementBloc] Target: ${event.referencingSchema}.${event.referencingTable}');
-      print('[DataManagementBloc] Record ID: ${event.recordId}');
+      // print('[DataManagementBloc] Opening reverse relation dialog...');
+      // print(
+      //     '[DataManagementBloc] Source: ${event.sourceSchema}.${event.sourceTable}');
+      // print(
+      //     '[DataManagementBloc] Target: ${event.referencingSchema}.${event.referencingTable}');
+      // print('[DataManagementBloc] Record ID: ${event.recordId}');
 
       emit(state.copyWith(
         isReverseRelationDialogOpen: true,
@@ -754,8 +779,8 @@ class DataManagementBloc
         },
       );
 
-      print('[DataManagementBloc] API Response Status: ${response.statusCode}');
-      print('[DataManagementBloc] API Response Data: ${response.data}');
+      // print('[DataManagementBloc] API Response Status: ${response.statusCode}');
+      // print('[DataManagementBloc] API Response Data: ${response.data}');
 
       if (response.statusCode == 200) {
         final data = response.data;
@@ -788,22 +813,22 @@ class DataManagementBloc
           totalCount: totalCount,
         );
 
-        print(
-            '[DataManagementBloc] ✅ Loaded ${reverseRelationData.relatedRecords.length} records');
+        // print(
+        //     '[DataManagementBloc] ✅ Loaded ${reverseRelationData.relatedRecords.length} records');
 
         emit(state.copyWith(
           reverseRelationData: reverseRelationData,
           isLoadingReverseRelation: false,
         ));
       } else {
-        print('[DataManagementBloc] ❌ API Error: ${response.statusCode}');
+        // print('[DataManagementBloc] ❌ API Error: ${response.statusCode}');
         emit(state.copyWith(
           isLoadingReverseRelation: false,
           errorMessage: 'Failed to load reverse relation data',
         ));
       }
     } catch (e) {
-      print('[DataManagementBloc] ❌ Exception: $e');
+              // print('[DataManagementBloc] ❌ Exception: $e');
       emit(state.copyWith(
         isLoadingReverseRelation: false,
         errorMessage: e.toString(),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/table_tab.dart';
-import 'schema_dropdown.dart';
 
 class TableTabBar extends StatelessWidget {
   final List<TableTab> tabs;
@@ -9,7 +8,6 @@ class TableTabBar extends StatelessWidget {
   final Function(String) onTabSelected;
   final Function(String) onTabClosed;
   final Function(int, int) onTabReorder;
-  final Function(String schemaName, String tableName) onSchemaTableSelected;
 
   const TableTabBar({
     super.key,
@@ -18,27 +16,24 @@ class TableTabBar extends StatelessWidget {
     required this.onTabSelected,
     required this.onTabClosed,
     required this.onTabReorder,
-    required this.onSchemaTableSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      child: Row(
-        children: [
-          // Schema dropdown at the beginning
-          SchemaDropdown(
-            onTableSelected: onSchemaTableSelected,
-          ),
-
-          // Table tabs
-          Expanded(
-            child: tabs.isEmpty
-                ? Container() // Empty container when no tabs
-                : ReorderableListView.builder(
+    return Row(
+      children: [
+        // Table tabs (Schema dropdown moved to header)
+        Expanded(
+          child: tabs.isEmpty
+              ? Container() // Empty container when no tabs
+              : Material(
+                  color: Colors.transparent,
+                  child: ReorderableListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: tabs.length,
                     onReorder: onTabReorder,
+                    shrinkWrap: true,
+                    buildDefaultDragHandles: false,
                     proxyDecorator: (child, index, animation) {
                       return AnimatedBuilder(
                         animation: animation,
@@ -59,14 +54,15 @@ class TableTabBar extends StatelessWidget {
                         key: ValueKey(tab.id),
                         tab: tab,
                         isActive: isActive,
+                        index: index,
                         onTap: () => onTabSelected(tab.id),
                         onClose: () => onTabClosed(tab.id),
                       );
                     },
                   ),
-          ),
-        ],
-      ),
+                ),
+        ),
+      ],
     );
   }
 }
@@ -74,6 +70,7 @@ class TableTabBar extends StatelessWidget {
 class _TabItem extends StatefulWidget {
   final TableTab tab;
   final bool isActive;
+  final int index;
   final VoidCallback onTap;
   final VoidCallback onClose;
 
@@ -81,6 +78,7 @@ class _TabItem extends StatefulWidget {
     super.key,
     required this.tab,
     required this.isActive,
+    required this.index,
     required this.onTap,
     required this.onClose,
   });
@@ -94,11 +92,11 @@ class _TabItemState extends State<_TabItem> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
+    return Material(
+      color: Colors.transparent,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
         child: Container(
           height: 40,
           constraints: const BoxConstraints(
@@ -116,17 +114,13 @@ class _TabItemState extends State<_TabItem> {
                 color: widget.isActive ? AppColors.primary : Colors.transparent,
                 width: 2,
               ),
-              right: BorderSide(
-                color: AppColors.border.withOpacity(0.5),
-                width: 1,
-              ),
             ),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                // Loading indicator or table icon
+                // Loading indicator or drag handle icon
                 if (widget.tab.isLoading)
                   SizedBox(
                     width: 12,
@@ -141,29 +135,35 @@ class _TabItemState extends State<_TabItem> {
                     ),
                   )
                 else
-                  Icon(
-                    Icons.table_view,
-                    size: 14,
-                    color: widget.isActive
-                        ? AppColors.primary
-                        : AppColors.textTertiary,
+                  ReorderableDragStartListener(
+                    index: widget.index,
+                    child: Icon(
+                      Icons.drag_handle,
+                      size: 14,
+                      color: widget.isActive
+                          ? AppColors.primary
+                          : AppColors.textTertiary,
+                    ),
                   ),
 
                 const SizedBox(width: 8),
 
-                // Table name
+                // Table name (clickable area)
                 Expanded(
-                  child: Text(
-                    widget.tab.displayName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight:
-                          widget.isActive ? FontWeight.w600 : FontWeight.w500,
-                      color: widget.isActive
-                          ? AppColors.textPrimary
-                          : AppColors.textSecondary,
+                  child: GestureDetector(
+                    onTap: widget.onTap,
+                    child: Text(
+                      widget.tab.displayName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight:
+                            widget.isActive ? FontWeight.w600 : FontWeight.w500,
+                        color: widget.isActive
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
 
@@ -173,7 +173,7 @@ class _TabItemState extends State<_TabItem> {
                     width: 6,
                     height: 6,
                     margin: const EdgeInsets.only(right: 4),
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.warning,
                     ),
@@ -181,9 +181,8 @@ class _TabItemState extends State<_TabItem> {
 
                 // Close button
                 if (_isHovered || widget.tab.hasUnsavedChanges)
-                  InkWell(
+                  GestureDetector(
                     onTap: widget.onClose,
-                    borderRadius: BorderRadius.circular(2),
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       child: Icon(

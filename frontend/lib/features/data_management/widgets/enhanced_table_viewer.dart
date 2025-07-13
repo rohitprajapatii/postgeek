@@ -326,128 +326,141 @@ class EnhancedTableViewer extends StatelessWidget {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: SingleChildScrollView(
-          child: DataTable(
-            horizontalMargin: 16,
-            columnSpacing: 24,
-            headingRowColor: MaterialStateProperty.all(AppColors.surface),
-            headingRowHeight: 48,
-            dataRowHeight: 48,
-            headingTextStyle: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-            dataTextStyle: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
-            border: TableBorder.all(
-              color: AppColors.border.withOpacity(0.5),
-              width: 1,
-            ),
-            columns: [
-              // Regular columns
-              ...tableDetails.columns.map((column) {
-                return DataColumn(
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (column.isPrimaryKey)
-                        Icon(
-                          Icons.key,
-                          size: 12,
-                          color: AppColors.warning,
-                        ),
-                      if (column.isForeignKey)
-                        Icon(
-                          Icons.link,
-                          size: 12,
-                          color: AppColors.info,
-                        ),
-                      if (column.isPrimaryKey || column.isForeignKey)
-                        const SizedBox(width: 4),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              column.columnName,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              column.dataType,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: AppColors.textTertiary,
-                                fontWeight: FontWeight.normal,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: DataTable(
+              horizontalMargin: 0,
+              columnSpacing: 24,
+              headingRowColor: MaterialStateProperty.all(AppColors.surface),
+              headingRowHeight: 48,
+              dataRowHeight: 48,
+              headingTextStyle: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+              dataTextStyle: TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+              border: TableBorder.all(
+                color: AppColors.border.withOpacity(0.5),
+                width: 1,
+              ),
+              columns: [
+                // Regular columns
+                ...tableDetails.columns.map((column) {
+                  return DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (column.isPrimaryKey)
+                          Icon(
+                            Icons.key,
+                            size: 12,
+                            color: AppColors.warning,
+                          ),
+                        if (column.isForeignKey)
+                          Icon(
+                            Icons.link,
+                            size: 12,
+                            color: AppColors.info,
+                          ),
+                        if (column.isPrimaryKey || column.isForeignKey)
+                          const SizedBox(width: 4),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                column.columnName,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ],
+                              Text(
+                                column.dataType,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textTertiary,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                // Reverse Relations column - show if any row has reverse relations
+                if (tableData.data
+                    .any((row) => row.reverseRelations.isNotEmpty))
+                  DataColumn(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.arrow_back,
+                          size: 12,
+                          color: AppColors.accent,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Reverse Relations',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                'referenced by',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppColors.textTertiary,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+              rows: tableData.data.map((row) {
+                final hasReverseRelationsColumn =
+                    tableData.data.any((r) => r.reverseRelations.isNotEmpty);
+
+                return DataRow(
+                  cells: [
+                    // Regular column cells
+                    ...tableDetails.columns.map((column) {
+                      final value = row.data[column.columnName];
+                      return DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          child: _buildCellContent(value, column, row),
+                        ),
+                        onTap: () =>
+                            _handleCellTap(context, value, column, row),
+                      );
+                    }).toList(),
+                    // Reverse Relations cell (always include if column exists)
+                    if (hasReverseRelationsColumn)
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          child: _buildReverseRelationsCell(context, row),
                         ),
                       ),
-                    ],
-                  ),
+                  ],
                 );
               }).toList(),
-              // Reverse Relations column - show if any row has reverse relations
-              if (tableData.data.any((row) => row.reverseRelations.isNotEmpty))
-                DataColumn(
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.arrow_back,
-                        size: 12,
-                        color: AppColors.accent,
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Reverse Relations',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              'referenced by',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: AppColors.textTertiary,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-            rows: tableData.data.map((row) {
-              final hasReverseRelationsColumn =
-                  tableData.data.any((r) => r.reverseRelations.isNotEmpty);
-
-              return DataRow(
-                cells: [
-                  // Regular column cells
-                  ...tableDetails.columns.map((column) {
-                    final value = row.data[column.columnName];
-                    return DataCell(
-                      _buildCellContent(value, column, row),
-                      onTap: () => _handleCellTap(context, value, column, row),
-                    );
-                  }).toList(),
-                  // Reverse Relations cell (always include if column exists)
-                  if (hasReverseRelationsColumn)
-                    DataCell(
-                      _buildReverseRelationsCell(context, row),
-                    ),
-                ],
-              );
-            }).toList(),
+            ),
           ),
         ),
       ),
@@ -583,8 +596,8 @@ class EnhancedTableViewer extends StatelessWidget {
             safeTableName = reverseRelation.referencingTable.toString();
             safeRelationCount = reverseRelation.relationCount;
           } catch (e) {
-            print(
-                '[EnhancedTableViewer] ❌ Error extracting reverseRelation display values: $e');
+            // print(
+            //     '[EnhancedTableViewer] ❌ Error extracting reverseRelation display values: $e');
             safeTableName = 'Unknown';
             safeRelationCount = 0;
           }
@@ -660,8 +673,8 @@ class EnhancedTableViewer extends StatelessWidget {
       return;
     }
 
-    print(
-        '[EnhancedTableViewer] Primary key: ${primaryKeyColumns.first} = $primaryKeyValue');
+    // print(
+    //     '[EnhancedTableViewer] Primary key: ${primaryKeyColumns.first} = $primaryKeyValue');
 
     // Create a safe version of the reverseRelation with guaranteed string values
     final safeReverseRelation = ReverseRelationInfo(
@@ -1363,7 +1376,11 @@ class _ReverseRelationDialogContentState
                 cells: columnNames.map((columnName) {
                   final value = record[columnName];
                   return DataCell(
-                    _buildCellContent(value),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      child: _buildCellContent(value),
+                    ),
                   );
                 }).toList(),
               );

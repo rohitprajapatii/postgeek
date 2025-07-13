@@ -7,6 +7,7 @@ import '../../connection/bloc/connection_bloc.dart' as connection_bloc;
 import '../bloc/data_management_bloc.dart';
 import '../widgets/enhanced_table_viewer.dart';
 import '../widgets/global_search_bar.dart';
+import '../widgets/schema_dropdown.dart';
 import '../widgets/table_tab_bar.dart';
 
 
@@ -87,31 +88,17 @@ class _EnhancedDataManagementScreenState
       ),
       child: Row(
         children: [
-          // App title
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.storage,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'PostGeek Studio',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
+          // Schema Explorer (moved from tab bar)
+          BlocBuilder<DataManagementBloc, DataManagementState>(
+            builder: (context, state) {
+              return SchemaDropdown(
+                onTableSelected: (schemaName, tableName) {
+                  context.read<DataManagementBloc>().add(
+                        OpenTableTab(schemaName: schemaName, tableName: tableName),
+                      );
+                },
+              );
+            },
           ),
 
           const SizedBox(width: 24),
@@ -236,11 +223,6 @@ class _EnhancedDataManagementScreenState
             onTabReorder: (oldIndex, newIndex) {
               context.read<DataManagementBloc>().add(
                     ReorderTabs(oldIndex: oldIndex, newIndex: newIndex),
-                  );
-            },
-            onSchemaTableSelected: (schemaName, tableName) {
-              context.read<DataManagementBloc>().add(
-                    OpenTableTab(schemaName: schemaName, tableName: tableName),
                   );
             },
           ),
