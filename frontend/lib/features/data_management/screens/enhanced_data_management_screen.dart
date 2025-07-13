@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../connection/bloc/connection_bloc.dart' as connection_bloc;
 import '../bloc/data_management_bloc.dart';
-import '../widgets/enhanced_schema_browser.dart';
 import '../widgets/enhanced_table_viewer.dart';
 import '../widgets/global_search_bar.dart';
 import '../widgets/table_tab_bar.dart';
@@ -62,29 +61,7 @@ class _EnhancedDataManagementScreenState
 
                 // Main content area
                 Expanded(
-                  child: Row(
-                    children: [
-                      // Left sidebar - Schema Browser
-                      Container(
-                        width: 280,
-                        decoration: const BoxDecoration(
-                          color: AppColors.surface,
-                          border: Border(
-                            right: BorderSide(
-                              color: AppColors.border,
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                        child: const EnhancedSchemaBrowser(),
-                      ),
-
-                      // Main content - Table viewers
-                      Expanded(
-                        child: _buildMainContent(),
-                      ),
-                    ],
-                  ),
+                  child: _buildMainContent(),
                 ),
               ],
             ),
@@ -236,10 +213,6 @@ class _EnhancedDataManagementScreenState
   Widget _buildTabBar() {
     return BlocBuilder<DataManagementBloc, DataManagementState>(
       builder: (context, state) {
-        if (!state.hasOpenTabs) {
-          return const SizedBox.shrink();
-        }
-
         return Container(
           height: 40,
           decoration: const BoxDecoration(
@@ -263,6 +236,11 @@ class _EnhancedDataManagementScreenState
             onTabReorder: (oldIndex, newIndex) {
               context.read<DataManagementBloc>().add(
                     ReorderTabs(oldIndex: oldIndex, newIndex: newIndex),
+                  );
+            },
+            onSchemaTableSelected: (schemaName, tableName) {
+              context.read<DataManagementBloc>().add(
+                    OpenTableTab(schemaName: schemaName, tableName: tableName),
                   );
             },
           ),
@@ -329,7 +307,7 @@ class _EnhancedDataManagementScreenState
             ),
             const SizedBox(height: 8),
             const Text(
-              'Select a table from the sidebar to start exploring your data',
+              'Select a table from the Schema Explorer dropdown to start exploring your data',
               style: TextStyle(
                 fontSize: 16,
                 color: AppColors.textSecondary,

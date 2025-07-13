@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../models/table_tab.dart';
+import 'schema_dropdown.dart';
 
 class TableTabBar extends StatelessWidget {
   final List<TableTab> tabs;
@@ -8,6 +9,7 @@ class TableTabBar extends StatelessWidget {
   final Function(String) onTabSelected;
   final Function(String) onTabClosed;
   final Function(int, int) onTabReorder;
+  final Function(String schemaName, String tableName) onSchemaTableSelected;
 
   const TableTabBar({
     super.key,
@@ -16,40 +18,54 @@ class TableTabBar extends StatelessWidget {
     required this.onTabSelected,
     required this.onTabClosed,
     required this.onTabReorder,
+    required this.onSchemaTableSelected,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(left: 280), // Account for sidebar width
-      child: ReorderableListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: tabs.length,
-        onReorder: onTabReorder,
-        proxyDecorator: (child, index, animation) {
-          return AnimatedBuilder(
-            animation: animation,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: 1.05,
-                child: child,
-              );
-            },
-            child: child,
-          );
-        },
-        itemBuilder: (context, index) {
-          final tab = tabs[index];
-          final isActive = tab.id == activeTabId;
+      child: Row(
+        children: [
+          // Schema dropdown at the beginning
+          SchemaDropdown(
+            onTableSelected: onSchemaTableSelected,
+          ),
 
-          return _TabItem(
-            key: ValueKey(tab.id),
-            tab: tab,
-            isActive: isActive,
-            onTap: () => onTabSelected(tab.id),
-            onClose: () => onTabClosed(tab.id),
-          );
-        },
+          // Table tabs
+          Expanded(
+            child: tabs.isEmpty
+                ? Container() // Empty container when no tabs
+                : ReorderableListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: tabs.length,
+                    onReorder: onTabReorder,
+                    proxyDecorator: (child, index, animation) {
+                      return AnimatedBuilder(
+                        animation: animation,
+                        builder: (context, child) {
+                          return Transform.scale(
+                            scale: 1.05,
+                            child: child,
+                          );
+                        },
+                        child: child,
+                      );
+                    },
+                    itemBuilder: (context, index) {
+                      final tab = tabs[index];
+                      final isActive = tab.id == activeTabId;
+
+                      return _TabItem(
+                        key: ValueKey(tab.id),
+                        tab: tab,
+                        isActive: isActive,
+                        onTap: () => onTabSelected(tab.id),
+                        onClose: () => onTabClosed(tab.id),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
