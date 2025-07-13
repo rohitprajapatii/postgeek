@@ -264,6 +264,42 @@ class LoadRelationData extends DataManagementEvent {
       ];
 }
 
+// Reverse Relation Events
+class OpenReverseRelationDialog extends DataManagementEvent {
+  final String sourceSchema;
+  final String sourceTable;
+  final String referencedColumn;
+  final String recordId;
+  final String referencingSchema;
+  final String referencingTable;
+  final String referencingColumn;
+
+  const OpenReverseRelationDialog({
+    required this.sourceSchema,
+    required this.sourceTable,
+    required this.referencedColumn,
+    required this.recordId,
+    required this.referencingSchema,
+    required this.referencingTable,
+    required this.referencingColumn,
+  });
+
+  @override
+  List<Object> get props => [
+        sourceSchema,
+        sourceTable,
+        referencedColumn,
+        recordId,
+        referencingSchema,
+        referencingTable,
+        referencingColumn,
+      ];
+}
+
+class CloseReverseRelationDialog extends DataManagementEvent {
+  const CloseReverseRelationDialog();
+}
+
 // Reset Events
 class ResetDataManagement extends DataManagementEvent {
   const ResetDataManagement();

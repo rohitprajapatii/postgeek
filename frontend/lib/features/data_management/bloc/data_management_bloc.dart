@@ -38,6 +38,8 @@ class DataManagementBloc
     on<LoadForeignKeyData>(_onLoadForeignKeyData);
     on<OpenRelationTab>(_onOpenRelationTab);
     on<LoadRelationData>(_onLoadRelationData);
+    on<OpenReverseRelationDialog>(_onOpenReverseRelationDialog);
+    on<CloseReverseRelationDialog>(_onCloseReverseRelationDialog);
     on<ResetDataManagement>(_onResetDataManagement);
   }
 
@@ -713,5 +715,110 @@ class DataManagementBloc
     Emitter<DataManagementState> emit,
   ) {
     emit(const DataManagementState.initial());
+  }
+
+  // Reverse Relation Event Handlers
+  Future<void> _onOpenReverseRelationDialog(
+    OpenReverseRelationDialog event,
+    Emitter<DataManagementState> emit,
+  ) async {
+    try {
+      print('[DataManagementBloc] Opening reverse relation dialog...');
+      print(
+          '[DataManagementBloc] Source: ${event.sourceSchema}.${event.sourceTable}');
+      print(
+          '[DataManagementBloc] Target: ${event.referencingSchema}.${event.referencingTable}');
+      print('[DataManagementBloc] Record ID: ${event.recordId}');
+
+      emit(state.copyWith(
+        isReverseRelationDialogOpen: true,
+        isLoadingReverseRelation: true,
+      ));
+
+      // Ensure all parameters are strings
+      final sourceSchema = event.sourceSchema.toString();
+      final sourceTable = event.sourceTable.toString();
+      final referencedColumn = event.referencedColumn.toString();
+      final recordId = event.recordId.toString();
+      final referencingSchema = event.referencingSchema.toString();
+      final referencingTable = event.referencingTable.toString();
+      final referencingColumn = event.referencingColumn.toString();
+
+      final response = await apiService.get(
+        '/api/data-management/tables/$sourceSchema/$sourceTable/reverse-relations/$referencedColumn/$recordId',
+        queryParameters: {
+          'referencingSchema': referencingSchema,
+          'referencingTable': referencingTable,
+          'referencingColumn': referencingColumn,
+          'limit': 50, // Keep as integer
+        },
+      );
+
+      print('[DataManagementBloc] API Response Status: ${response.statusCode}');
+      print('[DataManagementBloc] API Response Data: ${response.data}');
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+
+        // Safely extract data and totalCount
+        List<Map<String, dynamic>> records = [];
+        int totalCount = 0;
+
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('data') && data['data'] is List) {
+            records = (data['data'] as List).map((item) {
+              if (item is Map<String, dynamic>) {
+                return item;
+              } else if (item is Map) {
+                return Map<String, dynamic>.from(item);
+              } else {
+                return <String, dynamic>{'value': item.toString()};
+              }
+            }).toList();
+          }
+
+          totalCount = (data['totalCount'] as num?)?.toInt() ?? records.length;
+        }
+
+        final reverseRelationData = ReverseRelationData(
+          referencingTable: referencingTable,
+          referencingSchema: referencingSchema,
+          referencingColumn: referencingColumn,
+          relatedRecords: records,
+          totalCount: totalCount,
+        );
+
+        print(
+            '[DataManagementBloc] ✅ Loaded ${reverseRelationData.relatedRecords.length} records');
+
+        emit(state.copyWith(
+          reverseRelationData: reverseRelationData,
+          isLoadingReverseRelation: false,
+        ));
+      } else {
+        print('[DataManagementBloc] ❌ API Error: ${response.statusCode}');
+        emit(state.copyWith(
+          isLoadingReverseRelation: false,
+          errorMessage: 'Failed to load reverse relation data',
+        ));
+      }
+    } catch (e) {
+      print('[DataManagementBloc] ❌ Exception: $e');
+      emit(state.copyWith(
+        isLoadingReverseRelation: false,
+        errorMessage: e.toString(),
+      ));
+    }
+  }
+
+  void _onCloseReverseRelationDialog(
+    CloseReverseRelationDialog event,
+    Emitter<DataManagementState> emit,
+  ) {
+    emit(state.copyWith(
+      isReverseRelationDialogOpen: false,
+      reverseRelationData: null,
+      isLoadingReverseRelation: false,
+    ));
   }
 }

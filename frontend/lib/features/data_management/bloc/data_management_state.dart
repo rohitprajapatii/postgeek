@@ -24,6 +24,11 @@ class DataManagementState extends Equatable {
   final QueryResult? queryResult;
   final List<Map<String, dynamic>> foreignKeyData;
 
+  // Reverse relation dialog state
+  final bool isReverseRelationDialogOpen;
+  final ReverseRelationData? reverseRelationData;
+  final bool isLoadingReverseRelation;
+
   const DataManagementState({
     required this.status,
     this.schemas = const [],
@@ -36,6 +41,9 @@ class DataManagementState extends Equatable {
     this.tableData,
     this.queryResult,
     this.foreignKeyData = const [],
+    this.isReverseRelationDialogOpen = false,
+    this.reverseRelationData,
+    this.isLoadingReverseRelation = false,
   });
 
   const DataManagementState.initial()
@@ -49,7 +57,10 @@ class DataManagementState extends Equatable {
         selectedTableDetails = null,
         tableData = null,
         queryResult = null,
-        foreignKeyData = const [];
+        foreignKeyData = const [],
+        isReverseRelationDialogOpen = false,
+        reverseRelationData = null,
+        isLoadingReverseRelation = false;
 
   TableTab? get activeTab {
     if (activeTabId == null) return null;
@@ -74,6 +85,9 @@ class DataManagementState extends Equatable {
     PaginatedTableData? tableData,
     QueryResult? queryResult,
     List<Map<String, dynamic>>? foreignKeyData,
+    bool? isReverseRelationDialogOpen,
+    ReverseRelationData? reverseRelationData,
+    bool? isLoadingReverseRelation,
   }) {
     return DataManagementState(
       status: status ?? this.status,
@@ -87,6 +101,11 @@ class DataManagementState extends Equatable {
       tableData: tableData ?? this.tableData,
       queryResult: queryResult ?? this.queryResult,
       foreignKeyData: foreignKeyData ?? this.foreignKeyData,
+      isReverseRelationDialogOpen:
+          isReverseRelationDialogOpen ?? this.isReverseRelationDialogOpen,
+      reverseRelationData: reverseRelationData ?? this.reverseRelationData,
+      isLoadingReverseRelation:
+          isLoadingReverseRelation ?? this.isLoadingReverseRelation,
     );
   }
 
@@ -103,5 +122,8 @@ class DataManagementState extends Equatable {
         tableData,
         queryResult,
         foreignKeyData,
+        isReverseRelationDialogOpen,
+        reverseRelationData,
+        isLoadingReverseRelation,
       ];
 }

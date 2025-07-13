@@ -10,6 +10,7 @@ import '../widgets/enhanced_table_viewer.dart';
 import '../widgets/global_search_bar.dart';
 import '../widgets/table_tab_bar.dart';
 
+
 class EnhancedDataManagementScreen extends StatefulWidget {
   const EnhancedDataManagementScreen({super.key});
 
@@ -47,44 +48,49 @@ class _EnhancedDataManagementScreenState
           context.read<DataManagementBloc>().add(const LoadSchemas());
         }
       },
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        body: Column(
-          children: [
-            // Header with global search and connection status
-            _buildHeader(),
+      child: Stack(
+        children: [
+          Scaffold(
+            backgroundColor: AppColors.background,
+            body: Column(
+              children: [
+                // Header with global search and connection status
+                _buildHeader(),
 
-            // Tab bar for open tables
-            _buildTabBar(),
+                // Tab bar for open tables
+                _buildTabBar(),
 
-            // Main content area
-            Expanded(
-              child: Row(
-                children: [
-                  // Left sidebar - Schema Browser
-                  Container(
-                    width: 280,
-                    decoration: const BoxDecoration(
-                      color: AppColors.surface,
-                      border: Border(
-                        right: BorderSide(
-                          color: AppColors.border,
-                          width: 1,
+                // Main content area
+                Expanded(
+                  child: Row(
+                    children: [
+                      // Left sidebar - Schema Browser
+                      Container(
+                        width: 280,
+                        decoration: const BoxDecoration(
+                          color: AppColors.surface,
+                          border: Border(
+                            right: BorderSide(
+                              color: AppColors.border,
+                              width: 1,
+                            ),
+                          ),
                         ),
+                        child: const EnhancedSchemaBrowser(),
                       ),
-                    ),
-                    child: const EnhancedSchemaBrowser(),
-                  ),
 
-                  // Main content - Table viewers
-                  Expanded(
-                    child: _buildMainContent(),
+                      // Main content - Table viewers
+                      Expanded(
+                        child: _buildMainContent(),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+        ],
       ),
     );
   }

@@ -25,6 +25,18 @@ class ApiService {
     CancelToken? cancelToken,
   }) async {
     _checkBaseUrl();
+
+    // Debug logging
+    print('[ApiService] GET request to: $path');
+    print('[ApiService] Base URL: $_baseUrl');
+    if (queryParameters != null) {
+      print('[ApiService] Query parameters: $queryParameters');
+      print('[ApiService] Query parameter types:');
+      queryParameters.forEach((key, value) {
+        print('  $key: $value (${value.runtimeType})');
+      });
+    }
+
     try {
       final response = await _dio.get(
         path,
@@ -32,8 +44,11 @@ class ApiService {
         options: options,
         cancelToken: cancelToken,
       );
+      print('[ApiService] ✅ Response status: ${response.statusCode}');
       return response;
     } catch (e) {
+      print('[ApiService] ❌ Error in GET request: $e');
+      print('[ApiService] ❌ Error type: ${e.runtimeType}');
       throw _handleError(e);
     }
   }
@@ -112,6 +127,12 @@ class ApiService {
 
   Exception _handleError(dynamic error) {
     if (error is DioException) {
+      print('[ApiService] DioException details:');
+      print('  Type: ${error.type}');
+      print('  Status code: ${error.response?.statusCode}');
+      print('  Response data: ${error.response?.data}');
+      print('  Response data type: ${error.response?.data?.runtimeType}');
+
       switch (error.type) {
         case DioExceptionType.connectionTimeout:
         case DioExceptionType.sendTimeout:
@@ -121,13 +142,36 @@ class ApiService {
           final statusCode = error.response?.statusCode;
           final data = error.response?.data;
           String message = 'Unknown error occurred';
-          
-          if (data is Map && data.containsKey('message')) {
-            message = data['message'];
-          } else if (data is Map && data.containsKey('error')) {
-            message = data['error'];
+
+          try {
+            if (data is Map && data.containsKey('message')) {
+              final messageValue = data['message'];
+              if (messageValue is String) {
+                message = messageValue;
+              } else if (messageValue is List && messageValue.isNotEmpty) {
+                message = messageValue.first.toString();
+              } else {
+                message = messageValue.toString();
+              }
+            } else if (data is Map && data.containsKey('error')) {
+              final errorValue = data['error'];
+              if (errorValue is String) {
+                message = errorValue;
+              } else if (errorValue is List && errorValue.isNotEmpty) {
+                message = errorValue.first.toString();
+              } else {
+                message = errorValue.toString();
+              }
+            } else if (data is String) {
+              message = data;
+            } else {
+              message = data.toString();
+            }
+          } catch (e) {
+            print('[ApiService] Error extracting message from response: $e');
+            message = 'Error processing server response';
           }
-          
+
           return Exception('Error $statusCode: $message');
         case DioExceptionType.cancel:
           return Exception('Request was cancelled');

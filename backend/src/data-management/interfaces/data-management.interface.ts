@@ -57,9 +57,25 @@ export interface RelationData {
   relatedRecords: any[];
 }
 
+export interface ReverseRelationInfo {
+  referencingTable: string;
+  referencingSchema: string;
+  referencingColumn: string;
+  relationCount: number;
+}
+
+export interface ReverseRelationData {
+  referencingTable: string;
+  referencingSchema: string;
+  referencingColumn: string;
+  relatedRecords: any[];
+  totalCount: number;
+}
+
 export interface EnhancedTableRow {
   [key: string]: any;
   _relations?: { [columnName: string]: RelationData };
+  _reverseRelations?: { [relationKey: string]: ReverseRelationInfo };
 }
 
 export interface QueryResult {

@@ -185,13 +185,22 @@ export class DataManagementService {
 
     // Get table info to identify foreign key columns
     const tableInfo = await this.getTableInfo(schemaName, tableName);
-    const foreignKeyColumns = tableInfo.columns.filter(col => col.isForeignKey && col.references);
+    const foreignKeyColumns = tableInfo.columns.filter(
+      (col) => col.isForeignKey && col.references
+    );
+
+    // Get reverse relations for this table
+    const reverseRelations = await this.getReverseRelations(
+      schemaName,
+      tableName
+    );
 
     // Enhance data with relation information
     const enhancedData = await Promise.all(
       dataResult.rows.map(async (row) => {
         const relations: { [columnName: string]: any } = {};
-        
+        const reverseRelationsData: { [relationKey: string]: any } = {};
+
         // For each foreign key column, fetch related data
         for (const column of foreignKeyColumns) {
           const foreignKeyValue = row[column.columnName];
@@ -203,7 +212,7 @@ export class DataManagementService {
                 column.references.column,
                 foreignKeyValue
               );
-              
+
               relations[column.columnName] = {
                 columnName: column.columnName,
                 referencedTable: column.references.table,
@@ -213,14 +222,51 @@ export class DataManagementService {
               };
             } catch (error) {
               // If there's an error fetching related data, just skip it
-              console.warn(`Failed to fetch related data for ${column.columnName}:`, error);
+              console.warn(
+                `Failed to fetch related data for ${column.columnName}:`,
+                error
+              );
             }
           }
         }
-        
+
+        // For each reverse relation, get the count of related records
+        for (const reverseRelation of reverseRelations) {
+          const recordId = row[reverseRelation.referencedColumn];
+          if (recordId != null) {
+            try {
+              const reverseRelationData = await this.getReverseRelationData(
+                schemaName,
+                tableName,
+                recordId,
+                reverseRelation.referencedColumn,
+                reverseRelation.referencingSchema,
+                reverseRelation.referencingTable,
+                reverseRelation.referencingColumn,
+                { limit: 1, page: 1 } // Just get count, not data
+              );
+
+              const relationKey = `${reverseRelation.referencingSchema}.${reverseRelation.referencingTable}.${reverseRelation.referencingColumn}`;
+              reverseRelationsData[relationKey] = {
+                referencingTable: reverseRelation.referencingTable,
+                referencingSchema: reverseRelation.referencingSchema,
+                referencingColumn: reverseRelation.referencingColumn,
+                relationCount: reverseRelationData.totalCount,
+              };
+            } catch (error) {
+              // If there's an error fetching reverse relation data, just skip it
+              console.warn(
+                `Failed to fetch reverse relation data for ${reverseRelation.referencingTable}:`,
+                error
+              );
+            }
+          }
+        }
+
         return {
           ...row,
           _relations: relations,
+          _reverseRelations: reverseRelationsData,
         };
       })
     );
@@ -470,6 +516,106 @@ export class DataManagementService {
 
     const result = await this.databaseService.query(query, [value]);
     return result.rows;
+  }
+
+  /**
+   * Get reverse relations for a table (tables that reference this table)
+   */
+  async getReverseRelations(
+    schemaName: string,
+    tableName: string
+  ): Promise<
+    Array<{
+      referencingTable: string;
+      referencingSchema: string;
+      referencingColumn: string;
+      referencedColumn: string;
+    }>
+  > {
+    const query = `
+      SELECT DISTINCT
+        tc.table_schema AS referencing_schema,
+        tc.table_name AS referencing_table,
+        kcu.column_name AS referencing_column,
+        ccu.column_name AS referenced_column
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu ON 
+        tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.constraint_column_usage ccu ON 
+        ccu.constraint_name = tc.constraint_name
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND ccu.table_schema = $1
+        AND ccu.table_name = $2
+      ORDER BY tc.table_schema, tc.table_name, kcu.column_name;
+    `;
+
+    const result = await this.databaseService.query(query, [
+      schemaName,
+      tableName,
+    ]);
+
+    return result.rows.map((row) => ({
+      referencingTable: String(row.referencing_table || ""),
+      referencingSchema: String(row.referencing_schema || ""),
+      referencingColumn: String(row.referencing_column || ""),
+      referencedColumn: String(row.referenced_column || ""),
+    }));
+  }
+
+  /**
+   * Get reverse relation data for a specific record
+   */
+  async getReverseRelationData(
+    schemaName: string,
+    tableName: string,
+    recordId: any,
+    referencedColumn: string,
+    referencingSchema: string,
+    referencingTable: string,
+    referencingColumn: string,
+    queryOptions: TableQueryDto = {}
+  ): Promise<{
+    data: any[];
+    totalCount: number;
+  }> {
+    const { limit = 10, page = 1 } = queryOptions;
+    const offset = (page - 1) * limit;
+
+    const referencingQualifiedTable = this.getQualifiedTableName(
+      referencingSchema,
+      referencingTable
+    );
+    const quotedReferencingColumn = this.quoteIdentifier(referencingColumn);
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM ${referencingQualifiedTable} 
+      WHERE ${quotedReferencingColumn} = $1
+    `;
+    const countResult = await this.databaseService.query(countQuery, [
+      recordId,
+    ]);
+    const totalCount = parseInt(countResult.rows[0].total);
+
+    // Get data
+    const dataQuery = `
+      SELECT * 
+      FROM ${referencingQualifiedTable} 
+      WHERE ${quotedReferencingColumn} = $1
+      ORDER BY ${quotedReferencingColumn}
+      LIMIT $2 OFFSET $3
+    `;
+    const dataResult = await this.databaseService.query(dataQuery, [
+      recordId,
+      limit,
+      offset,
+    ]);
+
+    return {
+      data: dataResult.rows,
+      totalCount,
+    };
   }
 
   /**

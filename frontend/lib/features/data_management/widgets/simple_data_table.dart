@@ -131,12 +131,12 @@ class SimpleDataTable extends StatelessWidget {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.edit, size: 16),
-                              onPressed: () => onEditRecord(record),
+                              onPressed: () => onEditRecord(record.data),
                               tooltip: 'Edit',
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete, size: 16),
-                              onPressed: () => onDeleteRecord(record),
+                              onPressed: () => onDeleteRecord(record.data),
                               tooltip: 'Delete',
                             ),
                           ],
@@ -144,21 +144,21 @@ class SimpleDataTable extends StatelessWidget {
                       ),
                       // Data cells
                       ...tableDetails.columns.map((column) {
-                        final value = record[column.columnName];
-                        return DataCell(
-                          Text(
-                            value?.toString() ?? 'NULL',
-                            style: value == null
-                                ? TextStyle(
-                                    fontStyle: FontStyle.italic,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withOpacity(0.5),
-                                  )
-                                : null,
-                          ),
-                        );
+                                                  final value = record.data[column.columnName];
+                          return DataCell(
+                            Text(
+                              value?.toString() ?? 'NULL',
+                              style: value == null
+                                  ? TextStyle(
+                                      fontStyle: FontStyle.italic,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.5),
+                                    )
+                                  : null,
+                            ),
+                          );
                       }),
                     ],
                   );

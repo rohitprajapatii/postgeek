@@ -11,6 +11,7 @@ import {
   HttpStatus,
   ValidationPipe,
   Header,
+  BadRequestException,
 } from "@nestjs/common";
 import { DataManagementService } from "./data-management.service";
 import {
@@ -515,9 +516,9 @@ export class DataManagementController {
         schema,
         table
       );
-      
+
       const foreignKeyColumn = tableInfo.columns.find(
-        col => col.columnName === column && col.isForeignKey && col.references
+        (col) => col.columnName === column && col.isForeignKey && col.references
       );
 
       if (!foreignKeyColumn || !foreignKeyColumn.references) {
@@ -566,5 +567,68 @@ export class DataManagementController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  /**
+   * Get reverse relation data for a specific record
+   */
+  @Get("tables/:schema/:table/reverse-relations/:referencedColumn/:recordId")
+  async getReverseRelationData(
+    @Param("schema") schema: string,
+    @Param("table") table: string,
+    @Param("referencedColumn") referencedColumn: string,
+    @Param("recordId") recordId: string,
+    @Query("referencingSchema") referencingSchema: string,
+    @Query("referencingTable") referencingTable: string,
+    @Query("referencingColumn") referencingColumn: string,
+    @Query("limit") limit: string = "50",
+    @Query("page") page: string = "1",
+    @Query("sortBy") sortBy?: string,
+    @Query("sortOrder") sortOrder?: string
+  ) {
+    // Create queryOptions object from individual parameters
+    const queryOptions: TableQueryDto = {
+      limit: parseInt(limit, 10) || 50,
+      page: parseInt(page, 10) || 1,
+      sortBy: sortBy,
+      sortOrder: (sortOrder as "ASC" | "DESC") || "ASC",
+    };
+
+    try {
+      // Validate required parameters
+      if (!schema || !table || !referencedColumn || !recordId) {
+        throw new BadRequestException("Missing required path parameters");
+      }
+
+      if (!referencingSchema || !referencingTable || !referencingColumn) {
+        throw new BadRequestException("Missing required query parameters");
+      }
+
+      const result = await this.dataManagementService.getReverseRelationData(
+        schema,
+        table,
+        recordId,
+        referencedColumn,
+        referencingSchema,
+        referencingTable,
+        referencingColumn,
+        queryOptions
+      );
+
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Test endpoint to verify reverse relation route is accessible
+   */
+  @Get("test/reverse-relation-route")
+  async testReverseRelationRoute() {
+    return {
+      message: "Reverse relation route is accessible",
+      timestamp: new Date(),
+    };
   }
 }
