@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../bloc/queries_bloc.dart';
+import '../widgets/extension_not_enabled_card.dart';
 import '../widgets/query_stats_chart.dart';
 import '../widgets/query_list.dart';
 import '../widgets/query_types_chart.dart';
@@ -27,6 +28,13 @@ class _QueriesScreenState extends State<QueriesScreen> {
     return Scaffold(
       body: BlocBuilder<QueriesBloc, QueriesState>(
         builder: (context, state) {
+          final queryData = state.queryData;
+          final slowQueries = queryData?.slowQueries;
+          bool showExtensionCard = slowQueries != null &&
+              slowQueries.isNotEmpty &&
+              slowQueries.first is Map<String, dynamic> &&
+              slowQueries.first['error'] != null;
+
           return CustomScrollView(
             slivers: [
               // App Bar
@@ -55,12 +63,12 @@ class _QueriesScreenState extends State<QueriesScreen> {
               ),
 
               // Last Updated Info
-              if (state.queryData != null)
+              if (queryData != null)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: Text(
-                      'Last updated: ${DateFormat.yMd().add_Hms().format(state.queryData!.lastUpdated)}',
+                      'Last updated: ${DateFormat.yMd().add_Hms().format(queryData.lastUpdated)}',
                       style: Theme.of(context).textTheme.bodySmall,
                       textAlign: TextAlign.right,
                     ),
@@ -68,15 +76,14 @@ class _QueriesScreenState extends State<QueriesScreen> {
                 ),
 
               // Loading Indicator
-              if (state.status == QueriesStatus.loading &&
-                  state.queryData == null)
+              if (state.status == QueriesStatus.loading && queryData == null)
                 const SliverFillRemaining(
                   child: Center(
                     child: CircularProgressIndicator(),
                   ),
                 )
               // Error Message
-              else if (state.status == QueriesStatus.error)
+              else if (state.status == QueriesStatus.error && !showExtensionCard)
                 SliverFillRemaining(
                   child: Center(
                     child: Column(
@@ -111,11 +118,21 @@ class _QueriesScreenState extends State<QueriesScreen> {
                   ),
                 )
               // Query Data Content
-              else if (state.queryData != null)
+              else if (queryData != null)
                 SliverPadding(
                   padding: const EdgeInsets.all(16),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
+                      // Extension Not Enabled Card
+                      if (showExtensionCard)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 24.0),
+                          child: ExtensionNotEnabledCard(
+                            message: slowQueries.first['error'],
+                            hint: slowQueries.first['hint'] ?? '',
+                          ),
+                        ),
+
                       // Query Stats Section
                       Text(
                         'Query Statistics',
@@ -125,7 +142,7 @@ class _QueriesScreenState extends State<QueriesScreen> {
                       SizedBox(
                         height: 300,
                         child: QueryStatsChart(
-                          queryStats: state.queryData!.queryStats,
+                          queryStats: queryData.queryStats,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -139,20 +156,26 @@ class _QueriesScreenState extends State<QueriesScreen> {
                       SizedBox(
                         height: 300,
                         child: QueryTypesChart(
-                          queryTypes: state.queryData!.queryTypes,
+                          queryTypes: queryData.queryTypes,
                         ),
                       ),
                       const SizedBox(height: 24),
 
                       // Slow Queries List
-                      Text(
-                        'Slow Queries',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 16),
-                      QueryList(
-                        queries: state.queryData!.slowQueries,
-                      ),
+                      if (!showExtensionCard)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Slow Queries',
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 16),
+                            QueryList(
+                              queries: queryData.slowQueries,
+                            ),
+                          ],
+                        ),
                     ]),
                   ),
                 ),

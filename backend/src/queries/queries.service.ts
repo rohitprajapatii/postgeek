@@ -215,4 +215,31 @@ export class QueriesService {
       return { error: error.message };
     }
   }
+
+  async enablePgStatStatements() {
+    try {
+      await this.databaseService.query("CREATE EXTENSION IF NOT EXISTS pg_stat_statements");
+      // Verify it was created
+      const isEnabled = await this.checkPgStatStatements();
+      if (isEnabled) {
+        return { success: true, message: "pg_stat_statements enabled successfully. Please refresh." };
+      } else {
+        // This case might not be reachable if the query fails and is caught below, but it's good practice.
+        return { error: "Failed to enable pg_stat_statements. The command executed but the extension is still not available." };
+      }
+    } catch (error) {
+      console.error("Error enabling pg_stat_statements:", error);
+      // Check for a specific permission error
+      if (error.message.includes("permission denied")) {
+        return { 
+          error: "Permission denied. You must be a superuser to enable extensions.",
+          hint: "Please ask your database administrator to run 'CREATE EXTENSION pg_stat_statements;'."
+        };
+      }
+      return { 
+        error: "An unexpected error occurred.",
+        details: error.message 
+      };
+    }
+  }
 }
