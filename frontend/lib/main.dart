@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:responsive_framework/responsive_framework.dart';
@@ -9,6 +10,7 @@ import 'features/dashboard/bloc/dashboard_bloc.dart';
 import 'features/queries/bloc/queries_bloc.dart';
 import 'features/activity/bloc/activity_bloc.dart';
 import 'features/health/bloc/health_bloc.dart';
+import 'features/data_management/bloc/data_management_bloc.dart';
 import 'core/services/api_service.dart';
 
 void main() {
@@ -58,29 +60,68 @@ class PostGeekApp extends StatelessWidget {
               connectionBloc: context.read<ConnectionBloc>(),
             ),
           ),
+          BlocProvider<DataManagementBloc>(
+            create: (context) => DataManagementBloc(
+              apiService: context.read<ApiService>(),
+              connectionBloc: context.read<ConnectionBloc>(),
+            ),
+          ),
         ],
         child: Builder(
           builder: (context) {
-            return MaterialApp.router(
-              title: 'PostGeek',
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.darkTheme,
-              routerConfig:
-                  AppRouter.createRouter(context.read<ConnectionBloc>()),
-              builder: (context, child) => ResponsiveBreakpoints.builder(
-                child: child!,
-                breakpoints: [
-                  const Breakpoint(start: 0, end: 600, name: MOBILE),
-                  const Breakpoint(start: 601, end: 900, name: TABLET),
-                  const Breakpoint(start: 901, end: 1200, name: DESKTOP),
-                  const Breakpoint(
-                      start: 1201, end: double.infinity, name: 'XL'),
-                ],
+            return NoBackNavigationWrapper(
+              child: MaterialApp.router(
+                title: 'PostGeek',
+                debugShowCheckedModeBanner: false,
+                theme: AppTheme.darkTheme,
+                routerConfig:
+                    AppRouter.createRouter(context.read<ConnectionBloc>()),
+                builder: (context, child) => ResponsiveBreakpoints.builder(
+                  child: child!,
+                  breakpoints: [
+                    const Breakpoint(start: 0, end: 600, name: MOBILE),
+                    const Breakpoint(start: 601, end: 900, name: TABLET),
+                    const Breakpoint(start: 901, end: 1200, name: DESKTOP),
+                    const Breakpoint(
+                        start: 1201, end: double.infinity, name: 'XL'),
+                  ],
+                ),
               ),
             );
           },
         ),
       ),
+    );
+  }
+}
+
+// Widget to completely prevent back navigation
+class NoBackNavigationWrapper extends StatelessWidget {
+  final Widget child;
+
+  const NoBackNavigationWrapper({
+    super.key,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false, // Completely disable back navigation
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        // Intercept all pop attempts and do nothing
+        if (didPop) {
+          return;
+        }
+        if (kDebugMode) {
+          print('Back navigation blocked - no action taken');
+        }
+
+        // For web: Do nothing (just ignore the back button)
+        // For mobile: Could optionally close the app, but for this use case we just ignore
+        // SystemNavigator.pop(); // Uncomment if you want to close app on mobile
+      },
+      child: child,
     );
   }
 }

@@ -1,9 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../features/connection/bloc/connection_bloc.dart' as connection_bloc;
 import '../theme/app_colors.dart';
+import '../router/app_router.dart';
 
 class SidebarNavigation extends StatelessWidget {
   final String currentPath;
@@ -69,6 +70,12 @@ class SidebarNavigation extends StatelessWidget {
                   'Health',
                   Icons.health_and_safety,
                   '/health',
+                ),
+                _buildNavItem(
+                  context,
+                  'Data Studio',
+                  Icons.table_view,
+                  '/data-management',
                 ),
               ],
             ),
@@ -164,7 +171,7 @@ class SidebarNavigation extends StatelessWidget {
         ),
         onTap: () {
           if (!isActive) {
-            context.go(path);
+            _navigateToPath(context, path);
           }
         },
         shape: RoundedRectangleBorder(
@@ -174,6 +181,16 @@ class SidebarNavigation extends StatelessWidget {
         visualDensity: VisualDensity.compact,
       ),
     );
+  }
+
+  /// Navigate to a path using single-stack navigation (replacement instead of push)
+  void _navigateToPath(BuildContext context, String path) {
+    // Use the custom extension to ensure single-screen navigation
+    context.navigateToScreen(path);
+
+    if (kIsWeb && kDebugMode) {
+      print('Navigating to $path with route replacement');
+    }
   }
 
   void _showDisconnectConfirmation(BuildContext context) {
