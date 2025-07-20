@@ -29,7 +29,7 @@ export class StatisticsService {
         pg_stat_database.deadlocks as deadlocks,
         pg_stat_database.stats_reset as stats_reset
       FROM pg_database
-      JOIN pg_stat_database ON pg_database.datname = pg_stat_database.datname
+      LEFT JOIN pg_stat_database ON pg_database.datname = pg_stat_database.datname
       WHERE pg_database.datname = current_database();
     `;
 

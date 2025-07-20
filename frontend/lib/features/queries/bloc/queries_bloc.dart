@@ -22,6 +22,7 @@ class QueriesBloc extends Bloc<QueriesEvent, QueriesState> {
     on<StartQueriesRefresh>(_onStartQueriesRefresh);
     on<StopQueriesRefresh>(_onStopQueriesRefresh);
     on<ResetQueryStats>(_onResetQueryStats);
+    on<EnableExtension>(_onEnableExtension);
 
     // Subscribe to connection state changes
     connectionBloc.stream.listen((connectionState) {
@@ -43,13 +44,27 @@ class QueriesBloc extends Bloc<QueriesEvent, QueriesState> {
     LoadQueries event,
     Emitter<QueriesState> emit,
   ) async {
+    // Keep the old data while loading new data
     emit(state.copyWith(status: QueriesStatus.loading));
 
     try {
       // Fetch all required query data
-      final slowQueries = await _fetchSlowQueries(event.limit);
+      final slowQueriesResult = await _fetchSlowQueries(event.limit);
       final queryStats = await _fetchQueryStats();
       final queryTypes = await _fetchQueryTypes();
+
+      List<dynamic> slowQueries;
+      if (slowQueriesResult is List) {
+        slowQueries = slowQueriesResult;
+      } else if (slowQueriesResult is Map<String, dynamic> &&
+          slowQueriesResult.containsKey('error')) {
+        // This is the "extension not enabled" case. Wrap the error map in a list
+        // so the UI can process it correctly.
+        slowQueries = [slowQueriesResult];
+      } else {
+        // Handle any other unexpected format gracefully.
+        slowQueries = [];
+      }
 
       // Create query data object
       final queryData = QueryData(
@@ -62,7 +77,7 @@ class QueriesBloc extends Bloc<QueriesEvent, QueriesState> {
       emit(state.copyWith(
         status: QueriesStatus.loaded,
         queryData: queryData,
-        errorMessage: null,
+        clearErrorMessage: true,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -110,9 +125,36 @@ class QueriesBloc extends Bloc<QueriesEvent, QueriesState> {
     }
   }
 
-  Future<List<dynamic>> _fetchSlowQueries(int limit) async {
-    final response = await apiService.get('/api/queries/slow', queryParameters: {'limit': limit});
-    return response.data is List ? response.data : [];
+  Future<void> _onEnableExtension(
+    EnableExtension event,
+    Emitter<QueriesState> emit,
+  ) async {
+    emit(state.copyWith(status: QueriesStatus.enablingExtension));
+    try {
+      final response = await apiService.post('/api/queries/enable-extension');
+      if (response.data['success'] == true) {
+        // Show a temporary success message before reloading
+        emit(state.copyWith(status: QueriesStatus.loaded));
+        // Reload the data to reflect the change
+        add(const LoadQueries());
+      } else {
+        emit(state.copyWith(
+          status: QueriesStatus.error,
+          errorMessage: response.data['error'] ?? 'Failed to enable extension',
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        status: QueriesStatus.error,
+        errorMessage: 'An error occurred: ${e.toString()}',
+      ));
+    }
+  }
+
+  Future<dynamic> _fetchSlowQueries(int limit) async {
+    final response = await apiService
+        .get('/api/queries/slow', queryParameters: {'limit': limit});
+    return response.data;
   }
 
   Future<Map<String, dynamic>> _fetchQueryStats() async {

@@ -5,6 +5,7 @@ enum QueriesStatus {
   loading,
   loaded,
   error,
+  enablingExtension,
 }
 
 class QueriesState extends Equatable {
@@ -27,11 +28,12 @@ class QueriesState extends Equatable {
     QueriesStatus? status,
     QueryData? queryData,
     String? errorMessage,
+    bool clearErrorMessage = false,
   }) {
     return QueriesState(
       status: status ?? this.status,
       queryData: queryData ?? this.queryData,
-      errorMessage: errorMessage,
+      errorMessage: clearErrorMessage ? null : errorMessage ?? this.errorMessage,
     );
   }
 

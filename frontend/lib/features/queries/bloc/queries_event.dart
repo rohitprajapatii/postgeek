@@ -21,3 +21,5 @@ class StartQueriesRefresh extends QueriesEvent {}
 class StopQueriesRefresh extends QueriesEvent {}
 
 class ResetQueryStats extends QueriesEvent {}
+
+class EnableExtension extends QueriesEvent {} 

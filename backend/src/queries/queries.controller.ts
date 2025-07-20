@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Get, Post, Query, ParseIntPipe, DefaultValuePipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { QueriesService } from './queries.service';
 
 @Controller('queries')
@@ -23,7 +23,14 @@ export class QueriesController {
   }
 
   @Post('reset')
+  @HttpCode(HttpStatus.OK)
   resetQueryStats() {
     return this.queriesService.resetQueryStats();
+  }
+
+  @Post('enable-extension')
+  @HttpCode(HttpStatus.OK)
+  enablePgStatStatements() {
+    return this.queriesService.enablePgStatStatements();
   }
 }
