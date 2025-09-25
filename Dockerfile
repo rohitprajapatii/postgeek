@@ -21,14 +21,12 @@ RUN apt-get update && apt-get install -y \
     zip \
     libglu1-mesa \
     wget \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and install Flutter
-RUN git clone https://github.com/flutter/flutter.git /flutter
+# Download and install Flutter (stable branch)
+RUN git clone --depth 1 -b stable https://github.com/flutter/flutter.git /flutter
 ENV PATH="/flutter/bin:${PATH}"
-RUN flutter channel stable
-RUN flutter upgrade
-RUN flutter config --enable-web
 
 # Change ownership of Flutter directory to nobody:nogroup
 RUN chown -R nobody:nogroup /flutter
@@ -45,8 +43,11 @@ ENV HOME=/home/nobody
 
 USER nobody
 
-# Configure git for the nobody user
+# Configure git for the nobody user and warm Flutter cache
 RUN git config --global --add safe.directory /flutter
+RUN flutter --version
+RUN flutter config --enable-web
+RUN flutter precache --web
 
 # Install dependencies first
 RUN flutter pub get
