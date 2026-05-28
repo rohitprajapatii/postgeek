@@ -1,23 +1,34 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api, type Row, type SchemaInfo } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type Filter, type Row, type SchemaInfo, type TableInfo } from "@/lib/api";
 import { Card, Badge, Button, EmptyState, Spinner } from "@/components/ui/primitives";
 import { QueryError, TableSkeleton } from "@/components/ui/states";
+import { Drawer } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import { formatNumber, truncate } from "@/lib/format";
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronRight,
+  ChevronsUpDown,
   Columns3,
   Database,
+  Download,
+  Filter as FilterIcon,
   KeyRound,
   Link2,
+  Pencil,
+  Plus,
   Search,
   Table2,
   Terminal,
+  Trash2,
+  X,
 } from "lucide-react";
 import { QueryConsole } from "@/components/data/query-console";
+import { RecordForm } from "@/components/data/record-form";
 
 type ViewTab = "data" | "structure" | "sql";
 
@@ -221,79 +232,375 @@ function TableWorkspace({
   );
 }
 
+const OPERATORS = ["=", "!=", ">", "<", ">=", "<=", "ILIKE", "LIKE", "IN"];
+
 function TableData({ schema, table }: { schema: string; table: string }) {
-  const [page, setPage] = useState(1);
+  const qc = useQueryClient();
   const limit = 50;
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ column: string; order: "ASC" | "DESC" } | null>(null);
+  const [filters, setFilters] = useState<Filter[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [editing, setEditing] = useState<{ mode: "create" | "edit"; row?: Row } | null>(null);
+  const [related, setRelated] = useState<{ title: string; records: Row[] } | null>(null);
+
+  const info = useQuery({
+    queryKey: ["tableInfo", schema, table],
+    queryFn: () => api.tableInfo(schema, table),
+  });
+  const tableInfo = info.data?.data as TableInfo | undefined;
+  const primaryKeys = tableInfo?.primaryKeys ?? [];
+
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ["tableData", schema, table, page],
-    queryFn: () => api.tableData(schema, table, { page, limit }),
+    queryKey: ["tableData", schema, table, page, sort, filters],
+    queryFn: () =>
+      api.tableData(schema, table, {
+        page,
+        limit,
+        sortBy: sort?.column,
+        sortOrder: sort?.order,
+        filters,
+      }),
   });
 
-  if (isLoading) return <Card><TableSkeleton rows={10} /></Card>;
-  if (isError) return <Card><QueryError error={error} onRetry={() => refetch()} /></Card>;
+  const del = useMutation({
+    mutationFn: (where: Row) => api.deleteRecord(schema, table, where),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tableData", schema, table] }),
+  });
+
+  const toggleSort = (col: string) => {
+    setPage(1);
+    setSort((s) =>
+      s?.column !== col
+        ? { column: col, order: "ASC" }
+        : s.order === "ASC"
+          ? { column: col, order: "DESC" }
+          : null,
+    );
+  };
+
+  const whereFor = (row: Row): Row | null => {
+    const keys = primaryKeys.length ? primaryKeys : null;
+    if (!keys) return null;
+    const where: Row = {};
+    keys.forEach((k) => (where[k] = row[k]));
+    return where;
+  };
+
+  const handleExport = async (format: "csv" | "json") => {
+    const res = await api.exportTable(schema, table, format, filters);
+    const blob = new Blob([res.data], {
+      type: format === "csv" ? "text/csv" : "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = res.filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const rows = (data?.data ?? []) as Row[];
   const pagination = data?.pagination;
-  const columns = rows.length ? Object.keys(rows[0]).filter((k) => !k.startsWith("_")) : [];
+  const columns = useMemo(
+    () =>
+      tableInfo?.columns.map((c) => c.columnName) ??
+      (rows.length ? Object.keys(rows[0]).filter((k) => !k.startsWith("_")) : []),
+    [tableInfo, rows],
+  );
+  const canEdit = primaryKeys.length > 0;
 
   return (
-    <Card>
-      <div className="scrollbar-thin max-h-[calc(100vh-15rem)] overflow-auto">
-        {rows.length ? (
-          <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-white">
-              <tr className="border-b border-slate-200">
-                {columns.map((c) => (
-                  <th key={c} className="whitespace-nowrap px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
-                    {c}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => (
-                <tr key={i} className="border-b border-slate-100 last:border-0 hover:bg-surface-subtle">
-                  {columns.map((c) => (
-                    <td key={c} className="max-w-xs truncate px-4 py-2.5 align-middle">
-                      <CellValue value={row[c]} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState icon={<Table2 className="h-5 w-5" />} title="This table is empty" />
-        )}
+    <div className="space-y-3">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setEditing({ mode: "create" })} disabled={!tableInfo}>
+            <Plus className="h-3.5 w-3.5" />
+            Add row
+          </Button>
+          <Button
+            variant={filters.length || showFilters ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setShowFilters((s) => !s)}
+          >
+            <FilterIcon className="h-3.5 w-3.5" />
+            Filter{filters.length ? ` (${filters.length})` : ""}
+          </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => handleExport("csv")}>
+            <Download className="h-3.5 w-3.5" />
+            CSV
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => handleExport("json")}>
+            <Download className="h-3.5 w-3.5" />
+            JSON
+          </Button>
+        </div>
       </div>
 
-      {pagination ? (
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
-          <span className="text-ink-muted">
-            {formatNumber((pagination.page - 1) * pagination.limit + (rows.length ? 1 : 0))}–
-            {formatNumber((pagination.page - 1) * pagination.limit + rows.length)} of{" "}
-            {formatNumber(pagination.total)} rows
-          </span>
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" disabled={page <= 1 || isFetching} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-              Previous
-            </Button>
-            <span className="text-xs text-ink-muted">
-              Page {pagination.page} / {Math.max(1, pagination.totalPages)}
-            </span>
-            <Button variant="secondary" size="sm" disabled={page >= pagination.totalPages || isFetching} onClick={() => setPage((p) => p + 1)}>
-              Next
-            </Button>
-          </div>
-        </div>
+      {showFilters ? (
+        <FilterBar
+          columns={columns}
+          filters={filters}
+          onApply={(f) => {
+            setFilters(f);
+            setPage(1);
+          }}
+        />
       ) : null}
+
+      <Card>
+        {isLoading ? (
+          <TableSkeleton rows={10} />
+        ) : isError ? (
+          <QueryError error={error} onRetry={() => refetch()} />
+        ) : (
+          <>
+            <div className="scrollbar-thin max-h-[calc(100vh-19rem)] overflow-auto">
+              {rows.length ? (
+                <table className="w-full border-collapse text-sm">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="border-b border-slate-200">
+                      {columns.map((c) => {
+                        const active = sort?.column === c;
+                        return (
+                          <th key={c} className="whitespace-nowrap px-4 py-2.5 text-left">
+                            <button
+                              onClick={() => toggleSort(c)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-muted hover:text-ink"
+                            >
+                              {c}
+                              {active ? (
+                                sort!.order === "ASC" ? (
+                                  <ArrowUp className="h-3 w-3 text-brand-600" />
+                                ) : (
+                                  <ArrowDown className="h-3 w-3 text-brand-600" />
+                                )
+                              ) : (
+                                <ChevronsUpDown className="h-3 w-3 text-slate-300" />
+                              )}
+                            </button>
+                          </th>
+                        );
+                      })}
+                      {canEdit ? <th className="px-4 py-2.5" /> : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => {
+                      const relations = (row._relations ?? {}) as Record<string, { relatedRecords: Row[]; referencedTable: string }>;
+                      return (
+                        <tr key={i} className="group border-b border-slate-100 last:border-0 hover:bg-surface-subtle">
+                          {columns.map((c) => (
+                            <td key={c} className="max-w-xs truncate px-4 py-2.5 align-middle">
+                              <CellValue
+                                value={row[c]}
+                                relation={relations[c]}
+                                onOpenRelation={(rec, label) => setRelated({ title: label, records: rec })}
+                              />
+                            </td>
+                          ))}
+                          {canEdit ? (
+                            <td className="px-2 py-2 text-right">
+                              <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                <button
+                                  onClick={() => setEditing({ mode: "edit", row })}
+                                  className="grid h-7 w-7 place-items-center rounded-lg text-ink-muted hover:bg-brand-50 hover:text-brand-600"
+                                  title="Edit row"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const where = whereFor(row);
+                                    if (where && confirm("Delete this row? This cannot be undone.")) del.mutate(where);
+                                  }}
+                                  className="grid h-7 w-7 place-items-center rounded-lg text-ink-muted hover:bg-rose-50 hover:text-accent-rose"
+                                  title="Delete row"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <EmptyState
+                  icon={<Table2 className="h-5 w-5" />}
+                  title={filters.length ? "No rows match your filters" : "This table is empty"}
+                />
+              )}
+            </div>
+
+            {pagination ? (
+              <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm">
+                <span className="text-ink-muted">
+                  {formatNumber((pagination.page - 1) * pagination.limit + (rows.length ? 1 : 0))}–
+                  {formatNumber((pagination.page - 1) * pagination.limit + rows.length)} of{" "}
+                  {formatNumber(pagination.total)} rows
+                  {!canEdit ? " · no primary key (read-only)" : ""}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" disabled={page <= 1 || isFetching} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                    Previous
+                  </Button>
+                  <span className="text-xs text-ink-muted">
+                    Page {pagination.page} / {Math.max(1, pagination.totalPages)}
+                  </span>
+                  <Button variant="secondary" size="sm" disabled={page >= pagination.totalPages || isFetching} onClick={() => setPage((p) => p + 1)}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </Card>
+
+      {editing && tableInfo ? (
+        <RecordForm
+          schema={schema}
+          table={table}
+          info={tableInfo}
+          mode={editing.mode}
+          initial={editing.row}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            qc.invalidateQueries({ queryKey: ["tableData", schema, table] });
+          }}
+        />
+      ) : null}
+
+      {related ? (
+        <Drawer open onClose={() => setRelated(null)} title="Related record" subtitle={related.title}>
+          {related.records.length ? (
+            related.records.map((rec, i) => (
+              <div key={i} className="mb-3 space-y-1.5 rounded-xl border border-slate-200 p-3 last:mb-0">
+                {Object.entries(rec)
+                  .filter(([k]) => !k.startsWith("_"))
+                  .map(([k, v]) => (
+                    <div key={k} className="flex items-start justify-between gap-4 text-sm">
+                      <span className="text-ink-muted">{k}</span>
+                      <span className="text-right font-medium text-ink">
+                        <CellValue value={v} />
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            ))
+          ) : (
+            <EmptyState title="No related record found" />
+          )}
+        </Drawer>
+      ) : null}
+    </div>
+  );
+}
+
+function FilterBar({
+  columns,
+  filters,
+  onApply,
+}: {
+  columns: string[];
+  filters: Filter[];
+  onApply: (f: Filter[]) => void;
+}) {
+  const [draft, setDraft] = useState<Filter[]>(filters.length ? filters : [{ column: columns[0] ?? "", operator: "=", value: "" }]);
+
+  const update = (i: number, patch: Partial<Filter>) =>
+    setDraft((d) => d.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
+
+  return (
+    <Card className="card-pad space-y-2.5">
+      {draft.map((f, i) => (
+        <div key={i} className="flex flex-wrap items-center gap-2">
+          <select
+            value={f.column}
+            onChange={(e) => update(i, { column: e.target.value })}
+            className="h-9 rounded-lg border border-slate-200 bg-surface-subtle px-2.5 text-sm outline-none focus:border-brand-400 focus:bg-white"
+          >
+            {columns.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <select
+            value={f.operator}
+            onChange={(e) => update(i, { operator: e.target.value })}
+            className="h-9 rounded-lg border border-slate-200 bg-surface-subtle px-2.5 font-mono text-sm outline-none focus:border-brand-400 focus:bg-white"
+          >
+            {OPERATORS.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+          <input
+            value={f.value}
+            onChange={(e) => update(i, { value: e.target.value })}
+            placeholder="value"
+            className="h-9 flex-1 rounded-lg border border-slate-200 bg-surface-subtle px-3 text-sm outline-none focus:border-brand-400 focus:bg-white focus:ring-4 focus:ring-brand-400/10"
+          />
+          <button
+            onClick={() => setDraft((d) => d.filter((_, idx) => idx !== i))}
+            className="grid h-9 w-9 place-items-center rounded-lg text-ink-muted hover:bg-rose-50 hover:text-accent-rose"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+      <div className="flex items-center justify-between pt-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setDraft((d) => [...d, { column: columns[0] ?? "", operator: "=", value: "" }])}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add condition
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={() => { setDraft([]); onApply([]); }}>
+            Clear
+          </Button>
+          <Button size="sm" onClick={() => onApply(draft.filter((f) => f.column && f.value !== ""))}>
+            Apply filters
+          </Button>
+        </div>
+      </div>
     </Card>
   );
 }
 
-function CellValue({ value }: { value: unknown }) {
+function CellValue({
+  value,
+  relation,
+  onOpenRelation,
+}: {
+  value: unknown;
+  relation?: { relatedRecords: Row[]; referencedTable: string };
+  onOpenRelation?: (records: Row[], label: string) => void;
+}) {
   if (value === null || value === undefined)
     return <span className="text-xs italic text-slate-400">null</span>;
+
+  if (relation && relation.relatedRecords?.length && onOpenRelation) {
+    return (
+      <button
+        onClick={() => onOpenRelation(relation.relatedRecords, `→ ${relation.referencedTable} (${String(value)})`)}
+        className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-1.5 py-0.5 font-mono text-xs text-brand-700 hover:bg-brand-100"
+        title={`View related ${relation.referencedTable}`}
+      >
+        <Link2 className="h-3 w-3" />
+        {truncate(String(value), 40)}
+      </button>
+    );
+  }
+
   if (typeof value === "boolean")
     return <Badge tone={value ? "teal" : "neutral"}>{String(value)}</Badge>;
   if (typeof value === "object")

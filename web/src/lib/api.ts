@@ -135,6 +135,29 @@ export interface QueryResult {
 
 export type Row = Record<string, unknown>;
 
+export interface Filter {
+  column: string;
+  operator: string;
+  value: string;
+}
+
+export interface PlanNode {
+  "Node Type": string;
+  "Relation Name"?: string;
+  Alias?: string;
+  "Startup Cost"?: number;
+  "Total Cost"?: number;
+  "Plan Rows"?: number;
+  "Plan Width"?: number;
+  "Actual Total Time"?: number;
+  "Actual Rows"?: number;
+  "Actual Loops"?: number;
+  "Index Name"?: string;
+  "Join Type"?: string;
+  Plans?: PlanNode[];
+  [key: string]: unknown;
+}
+
 export const api = {
   // Connection
   connect: (payload: ConnectionPayload) =>
@@ -195,12 +218,55 @@ export const api = {
   tableData: (
     schema: string,
     table: string,
-    query: { page?: number; limit?: number; sortBy?: string; sortOrder?: "ASC" | "DESC" },
-  ) =>
-    request<PaginatedResponse<Row>>(
+    opts: {
+      page?: number;
+      limit?: number;
+      sortBy?: string;
+      sortOrder?: "ASC" | "DESC";
+      filters?: Filter[];
+    },
+  ) => {
+    const query: Record<string, unknown> = {
+      page: opts.page,
+      limit: opts.limit,
+      sortBy: opts.sortBy,
+      sortOrder: opts.sortOrder,
+    };
+    // Encode filters using bracket notation that Express/qs parses into objects.
+    (opts.filters ?? []).forEach((f, i) => {
+      query[`filters[${i}][column]`] = f.column;
+      query[`filters[${i}][operator]`] = f.operator;
+      query[`filters[${i}][value]`] = f.value;
+    });
+    return request<PaginatedResponse<Row>>(
       "GET",
       `/data-management/tables/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/data`,
       { query },
+    );
+  },
+  createRecord: (schema: string, table: string, data: Row) =>
+    request<{ success: boolean; data: Row; message: string }>(
+      "POST",
+      `/data-management/tables/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/records`,
+      { body: { data } },
+    ),
+  updateRecord: (schema: string, table: string, data: Row, where: Row) =>
+    request<{ success: boolean; data: Row[]; message: string }>(
+      "PUT",
+      `/data-management/tables/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/records`,
+      { body: { data, where } },
+    ),
+  deleteRecord: (schema: string, table: string, where: Row) =>
+    request<{ success: boolean; data: { deletedCount: number }; message: string }>(
+      "DELETE",
+      `/data-management/tables/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/records`,
+      { body: { where } },
+    ),
+  exportTable: (schema: string, table: string, format: "csv" | "json", filters?: Filter[]) =>
+    request<{ success: boolean; data: string; filename: string }>(
+      "POST",
+      `/data-management/tables/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/export`,
+      { body: { format, filters } },
     ),
   searchTables: (q: string) =>
     request<{ success: boolean; data: { schemaName: string; tableName: string; rowCount: number }[] }>(

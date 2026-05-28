@@ -1,5 +1,6 @@
 import {
   Activity,
+  BarChart3,
   Database,
   Gauge,
   HeartPulse,
@@ -32,6 +33,12 @@ export const navItems: NavItem[] = [
     href: "/queries",
     icon: Database,
     description: "Slow queries & workload",
+  },
+  {
+    label: "Statistics",
+    href: "/statistics",
+    icon: BarChart3,
+    description: "Tables, indexes & I/O metrics",
   },
   {
     label: "Health",
