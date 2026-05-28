@@ -58,3 +58,26 @@ npm run build && npm run start   # serves on :3001
 ```
 
 The app is configured with `output: "standalone"` for easy containerization.
+
+## Docker
+
+A `web` service is wired into the repo's `docker-compose.yml` (port `3001`),
+alongside the existing Flutter client (`8081`) and backend (`3000`):
+
+```bash
+docker compose up -d --build web backend
+# Next.js web → http://localhost:3001
+# Backend API → http://localhost:3000/api
+```
+
+To build the image directly (from the repo root):
+
+```bash
+docker build -f web/Dockerfile -t postgeek-web \
+  --build-arg NEXT_PUBLIC_DEFAULT_API_URL=http://localhost:3000 .
+docker run -p 3001:3001 postgeek-web
+```
+
+`NEXT_PUBLIC_DEFAULT_API_URL` only sets the *default* value on the form; the
+URL the browser actually calls is whatever you enter on the connection screen,
+so it must be reachable from your browser (e.g. the host-mapped backend port).

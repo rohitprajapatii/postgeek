@@ -60,6 +60,40 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Lightweight Next.js web frontend (alternative to the Flutter client above)
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        # URL the browser uses to reach the backend (host-mapped port).
+        NEXT_PUBLIC_DEFAULT_API_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HOSTNAME=0.0.0.0
+    networks:
+      - app-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3001",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
 networks:
   app-network:
     driver: bridge

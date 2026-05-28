@@ -52,6 +52,45 @@ export class DataManagementService {
     return `${this.quoteIdentifier(schemaName)}.${this.quoteIdentifier(tableName)}`;
   }
 
+  // Allowed comparison operators for filters. Anything else is rejected to
+  // prevent operator injection into interpolated SQL.
+  private static readonly ALLOWED_OPERATORS = new Set([
+    "=",
+    "!=",
+    "<>",
+    ">",
+    "<",
+    ">=",
+    "<=",
+    "LIKE",
+    "ILIKE",
+    "NOT LIKE",
+    "NOT ILIKE",
+    "IN",
+    "NOT IN",
+    "IS",
+    "IS NOT",
+  ]);
+
+  private safeOperator(operator: string): string {
+    const op = (operator || "").trim().toUpperCase();
+    // Symbolic operators keep their original form; word operators are upper-cased.
+    const candidate = ["=", "!=", "<>", ">", "<", ">=", "<="].includes(operator?.trim())
+      ? operator.trim()
+      : op;
+    if (!DataManagementService.ALLOWED_OPERATORS.has(candidate)) {
+      throw new HttpException(
+        `Unsupported filter operator: ${operator}`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return candidate;
+  }
+
+  private safeSortOrder(sortOrder?: string): "ASC" | "DESC" {
+    return (sortOrder || "").toUpperCase() === "DESC" ? "DESC" : "ASC";
+  }
+
   /**
    * Get all schemas and their tables
    */
@@ -140,10 +179,10 @@ export class DataManagementService {
     let whereClause = "";
     const queryParams: any[] = [];
     if (filters && filters.length > 0) {
-      const conditions = filters.map((filter, index) => {
+      const conditions = filters.map((filter) => {
         const paramIndex = queryParams.length + 1;
         queryParams.push(this.formatFilterValue(filter));
-        return `${this.quoteIdentifier(filter.column)} ${filter.operator} $${paramIndex}`;
+        return `${this.quoteIdentifier(filter.column)} ${this.safeOperator(filter.operator)} $${paramIndex}`;
       });
       whereClause = `WHERE ${conditions.join(" AND ")}`;
     }
@@ -151,7 +190,7 @@ export class DataManagementService {
     // Build ORDER BY clause
     let orderClause = "";
     if (sortBy) {
-      orderClause = `ORDER BY ${this.quoteIdentifier(sortBy)} ${sortOrder}`;
+      orderClause = `ORDER BY ${this.quoteIdentifier(sortBy)} ${this.safeSortOrder(sortOrder)}`;
     }
 
     const qualifiedTableName = this.getQualifiedTableName(
@@ -631,10 +670,10 @@ export class DataManagementService {
     const queryParams: any[] = [];
 
     if (filters && filters.length > 0) {
-      const conditions = filters.map((filter, index) => {
+      const conditions = filters.map((filter) => {
         const paramIndex = queryParams.length + 1;
         queryParams.push(this.formatFilterValue(filter));
-        return `${this.quoteIdentifier(filter.column)} ${filter.operator} $${paramIndex}`;
+        return `${this.quoteIdentifier(filter.column)} ${this.safeOperator(filter.operator)} $${paramIndex}`;
       });
       whereClause = `WHERE ${conditions.join(" AND ")}`;
     }
@@ -948,17 +987,16 @@ export class DataManagementService {
   }
 
   private containsWriteOperations(query: string): boolean {
-    const writeKeywords = [
-      "INSERT",
-      "UPDATE",
-      "DELETE",
-      "DROP",
-      "CREATE",
-      "ALTER",
-      "TRUNCATE",
-    ];
-    const upperQuery = query.toUpperCase();
-    return writeKeywords.some((keyword) => upperQuery.includes(keyword));
+    // Strip line and block comments so they can't hide a write statement.
+    const sanitized = query
+      .replace(/--[^\n]*/g, " ")
+      .replace(/\/\*[\s\S]*?\*\//g, " ");
+
+    // Word-boundary match so common column names like created_at, updated_at
+    // and deleted_at are NOT mistaken for CREATE/UPDATE/DELETE.
+    const writePattern =
+      /\b(INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|GRANT|REVOKE|MERGE|COPY|CALL|DO|VACUUM|REINDEX|REFRESH)\b/i;
+    return writePattern.test(sanitized);
   }
 
   private extractColumnsFromIndexDef(indexDef: string): string[] {

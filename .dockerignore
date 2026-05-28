@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/dist
+**/build
+frontend/build
+frontend/.dart_tool
+**/*.log
+.git
+.github
+**/.DS_Store
+web/.env*.local
