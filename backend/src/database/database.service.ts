@@ -6,6 +6,35 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private pool: Pool;
   private connectedClient: PoolClient = null;
   private isConnected = false;
+  private lastError: string | null = null;
+  private connectionInfo: {
+    database?: string;
+    user?: string;
+    host?: string;
+    strategy?: string;
+    ssl?: boolean;
+  } = {};
+
+  getLastError(): string | null {
+    return this.lastError;
+  }
+
+  /**
+   * Pick the most useful message from a set of failed connection attempts.
+   * Authentication / host / permission errors are far more actionable than the
+   * "server does not support SSL connections" noise produced by SSL fallbacks.
+   */
+  private pickBestError(errors: string[]): string {
+    if (!errors.length) return "All connection strategies failed";
+    const informative = errors.find((e) =>
+      /password|authentic|role .* does not exist|database .* does not exist|permission|no pg_hba|timeout|ENOTFOUND|ECONNREFUSED|EHOSTUNREACH|getaddrinfo/i.test(
+        e
+      )
+    );
+    // De-prioritise the generic SSL-support message if anything better exists.
+    const nonSsl = errors.find((e) => !/does not support SSL/i.test(e));
+    return informative || nonSsl || errors[0];
+  }
 
   async onModuleInit() {
     console.log(
@@ -142,17 +171,48 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     };
 
     try {
-      const url = new URL(connectionString);
-      analysis.host = url.hostname;
-      analysis.port = parseInt(url.port) || 5432;
+      let host = "";
+      let port = 5432;
 
-      // SSL detection
-      const sslParam =
-        url.searchParams.get("sslmode") || url.searchParams.get("ssl");
-      analysis.requiresSSL = sslParam === "require" || sslParam === "true";
+      try {
+        const url = new URL(connectionString);
+        host = url.hostname;
+        port = parseInt(url.port) || 5432;
+      } catch {
+        // Fallback parser for connection strings with unencoded special
+        // characters in the password (common with cloud providers). We only
+        // need the host:port, which lives after the last '@'.
+        const at = connectionString.lastIndexOf("@");
+        if (at !== -1) {
+          let rest = connectionString.slice(at + 1).split("/")[0].split("?")[0];
+          // Strip IPv6 brackets if present
+          if (rest.startsWith("[")) {
+            const close = rest.indexOf("]");
+            host = rest.slice(1, close);
+            const after = rest.slice(close + 1);
+            port = parseInt(after.replace(/^:/, "")) || 5432;
+          } else {
+            const parts = rest.split(":");
+            host = parts[0];
+            port = parseInt(parts[1]) || 5432;
+          }
+        }
+      }
+
+      analysis.host = host;
+      analysis.port = port;
+
+      // SSL detection (regex so it works even when URL parsing fails)
+      const sslMatch = connectionString.match(/[?&](?:sslmode|ssl)=([^&\s]+)/i);
+      const mode = sslMatch ? sslMatch[1].toLowerCase() : null;
+      analysis.requiresSSL =
+        mode === "require" ||
+        mode === "verify-ca" ||
+        mode === "verify-full" ||
+        mode === "true";
 
       // Determine connection type
-      if (["localhost", "127.0.0.1", "::1"].includes(analysis.host)) {
+      if (["localhost", "127.0.0.1", "::1", ""].includes(analysis.host)) {
         analysis.isLocalhost = true;
         analysis.connectionType = "localhost";
       } else if (
@@ -177,12 +237,46 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Generate all possible connection strategies based on environment and target
+   * Determine the ordered list of SSL options to try for a target. Cloud /
+   * managed databases almost always require SSL, while local instances almost
+   * never use it — so we order attempts by what is most likely to succeed.
    */
-  private generateConnectionStrategies(originalConnectionString: string) {
+  private getSslOptions(
+    connectionString: string,
+    dbAnalysis: { isExternal: boolean }
+  ): Array<false | { rejectUnauthorized: boolean }> {
+    const sslOn = { rejectUnauthorized: false };
+    const match = connectionString.match(/[?&](?:sslmode|ssl)=([^&\s]+)/i);
+    const mode = match ? match[1].toLowerCase() : null;
+
+    if (mode) {
+      if (["require", "verify-ca", "verify-full", "true", "1", "yes"].includes(mode)) {
+        return [sslOn];
+      }
+      if (["disable", "false", "0", "no"].includes(mode)) {
+        return [false];
+      }
+      // prefer / allow → try SSL first, then plaintext
+      return [sslOn, false];
+    }
+
+    // No explicit preference: managed DBs usually need SSL, local usually not.
+    return dbAnalysis.isExternal ? [sslOn, false] : [false, sslOn];
+  }
+
+  /**
+   * Generate all possible connection strategies based on environment and target.
+   * Each strategy carries both a host variant and an explicit SSL setting.
+   */
+  private generateConnectionStrategies(
+    originalConnectionString: string
+  ): Array<{
+    connectionString: string;
+    ssl: false | { rejectUnauthorized: boolean };
+    description: string;
+  }> {
     const envInfo = this.getEnvironmentInfo();
     const dbAnalysis = this.analyzeConnectionString(originalConnectionString);
-    const strategies = [];
 
     console.log("[DatabaseService] Environment Analysis:", {
       appInDocker: envInfo.isInDocker,
@@ -190,88 +284,80 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       platform: envInfo.platform,
     });
 
-    // Strategy 1: Always try original connection string first
-    strategies.push({
-      connectionString: originalConnectionString,
-      description: "Original connection string",
-      priority: 1,
-    });
+    // 1) Build ordered host variants (the original always comes first).
+    const hostVariants: { connectionString: string; description: string }[] = [
+      { connectionString: originalConnectionString, description: "Original host" },
+    ];
 
-    // Strategy 2-N: Generate alternatives based on analysis
     if (dbAnalysis.isLocalhost && envInfo.isInDocker) {
-      // App in Docker + DB on localhost
       console.log("[DatabaseService] Detected: App in Docker → Localhost DB");
-
-      // Host network should handle this, but add fallbacks
-      strategies.push({
+      hostVariants.push({
         connectionString: originalConnectionString.replace(
           /localhost|127\.0\.0\.1/g,
           "host.docker.internal"
         ),
-        description: "Docker host.docker.internal",
-        priority: 2,
+        description: "host.docker.internal",
       });
-
-      // Try various Docker gateway IPs
-      envInfo.dockerNetworkInfo.hostAliases.forEach((alias, index) => {
-        strategies.push({
+      envInfo.dockerNetworkInfo.hostAliases.forEach((alias) => {
+        hostVariants.push({
           connectionString: originalConnectionString.replace(
             /localhost|127\.0\.0\.1/g,
             alias
           ),
           description: `Docker gateway ${alias}`,
-          priority: 3 + index,
         });
       });
     } else if (dbAnalysis.isDockerContainer && !envInfo.isInDocker) {
-      // App local + DB in Docker
       console.log("[DatabaseService] Detected: Local App → Docker DB");
-
-      // For Docker containers, try localhost mapping
-      strategies.push({
+      hostVariants.push({
         connectionString: originalConnectionString.replace(
-          /172\.\d+\.\d+\.\d+|.*\.docker\.internal/g,
+          /172\.\d+\.\d+\.\d+|[^@/]*\.docker\.internal/g,
           "localhost"
         ),
-        description: "Map Docker container to localhost",
-        priority: 2,
+        description: "Map Docker container → localhost",
       });
     } else if (dbAnalysis.isDockerContainer && envInfo.isInDocker) {
-      // App in Docker + DB in Docker (different containers/networks)
       console.log("[DatabaseService] Detected: Docker App → Docker DB");
-
-      // Try various Docker network strategies
-      strategies.push({
-        connectionString: originalConnectionString,
-        description: "Same Docker network",
-        priority: 2,
-      });
-
-      // Try host network mapping
-      strategies.push({
+      hostVariants.push({
         connectionString: originalConnectionString.replace(
           /172\.\d+\.\d+\.\d+/g,
           "host.docker.internal"
         ),
         description: "Docker inter-container via host",
-        priority: 3,
       });
     }
 
-    // For external databases, add SSL variants if not specified
-    if (dbAnalysis.isExternal && !dbAnalysis.requiresSSL) {
-      strategies.push({
-        connectionString:
-          originalConnectionString +
-          (originalConnectionString.includes("?") ? "&" : "?") +
-          "sslmode=prefer",
-        description: "External with SSL prefer",
-        priority: 10,
-      });
-    }
+    // De-duplicate host variants (a no-op replace yields the original again).
+    const seen = new Set<string>();
+    const uniqueHosts = hostVariants.filter((h) => {
+      if (seen.has(h.connectionString)) return false;
+      seen.add(h.connectionString);
+      return true;
+    });
 
-    // Sort by priority
-    return strategies.sort((a, b) => a.priority - b.priority);
+    // 2) Determine SSL options for this target.
+    const sslOptions = this.getSslOptions(originalConnectionString, dbAnalysis);
+
+    // 3) Combine. Try every SSL option for the original host; for alternate
+    //    host variants only use the primary SSL option to bound attempt count.
+    const strategies: Array<{
+      connectionString: string;
+      ssl: false | { rejectUnauthorized: boolean };
+      description: string;
+    }> = [];
+
+    uniqueHosts.forEach((host, hostIdx) => {
+      const opts = hostIdx === 0 ? sslOptions : sslOptions.slice(0, 1);
+      opts.forEach((ssl) => {
+        strategies.push({
+          connectionString: host.connectionString,
+          ssl,
+          description: `${host.description} · SSL ${ssl ? "on" : "off"}`,
+        });
+      });
+    });
+
+    return strategies;
   }
 
   /**
@@ -279,6 +365,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
    */
   private createPoolConfig(
     connectionString: string,
+    ssl: false | { rejectUnauthorized: boolean },
     dbAnalysis: any,
     envInfo: any
   ) {
@@ -286,25 +373,22 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     return {
       connectionString,
-      // Connection pool settings
+      // Connection pool settings. min:0 so we never pin an idle connection,
+      // which matters for managed DBs with tight connection limits.
       idleTimeoutMillis: 30000,
       max: 5,
-      min: 1,
+      min: 0,
       // Timeouts based on connection type
-      connectionTimeoutMillis: isLocal ? 5000 : 15000,
+      connectionTimeoutMillis: isLocal ? 7000 : 15000,
       query_timeout: 60000,
       statement_timeout: 60000,
-      // SSL configuration
-      ssl: dbAnalysis.requiresSSL
-        ? {
-            rejectUnauthorized: false, // Allow self-signed certs
-          }
-        : false,
+      // Explicit SSL setting decided per strategy
+      ssl,
       // Keep alive for external connections
       keepAlive: !isLocal,
       keepAliveInitialDelayMillis: !isLocal ? 10000 : 0,
       // Application name for debugging
-      application_name: `postgres-dashboard-${envInfo.isInDocker ? "docker" : "local"}`,
+      application_name: `postgeek-${envInfo.isInDocker ? "docker" : "local"}`,
     };
   }
 
@@ -323,6 +407,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     const poolConfig = this.createPoolConfig(
       strategy.connectionString,
+      strategy.ssl,
       dbAnalysis,
       envInfo
     );
@@ -336,9 +421,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         "SELECT version(), current_database(), current_user"
       );
 
-      // If successful, store the pool and client
+      // Return the client to the pool — queries use pool.query(), so we do
+      // not pin a dedicated client for the connection's lifetime.
+      client.release();
+
       this.pool = tempPool;
-      this.connectedClient = client;
+      this.connectedClient = null;
+      this.connectionInfo = {
+        database: result.rows[0].current_database,
+        user: result.rows[0].current_user,
+        host: dbAnalysis.host,
+        strategy: strategy.description,
+        ssl: Boolean(strategy.ssl),
+      };
 
       console.log(`[DatabaseService] ✅ SUCCESS with ${strategy.description}`);
       console.log(
@@ -347,6 +442,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
       return true;
     } catch (error) {
+      this.lastError = error.message;
       console.log(
         `[DatabaseService] ❌ Failed with ${strategy.description}: ${error.message}`
       );
@@ -362,9 +458,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     if (!connectionString) {
       console.error("[DatabaseService] ❌ No connection string provided");
+      this.lastError = "No connection string provided";
       return false;
     }
 
+    this.lastError = null;
     const envInfo = this.getEnvironmentInfo();
     const dbAnalysis = this.analyzeConnectionString(connectionString);
 
@@ -387,7 +485,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         `[DatabaseService] Generated ${strategies.length} connection strategies`
       );
 
-      // Try each strategy
+      // Try each strategy, collecting errors so we can report the best one.
+      const attemptErrors: string[] = [];
       for (let i = 0; i < strategies.length; i++) {
         const strategy = strategies[i];
         console.log(
@@ -399,6 +498,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           dbAnalysis,
           envInfo
         );
+        if (!success && this.lastError) attemptErrors.push(this.lastError);
         if (success) {
           // Verify connection with additional queries
           await this.verifyConnection();
@@ -420,6 +520,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       console.log("❌".repeat(20));
       await this.provideDetailedGuidance(connectionString, dbAnalysis, envInfo);
 
+      this.lastError = this.pickBestError(attemptErrors);
       this.isConnected = false;
       return false;
     } catch (error) {
@@ -439,18 +540,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private async verifyConnection() {
     try {
       // Get PostgreSQL version and basic info
-      const versionResult = await this.connectedClient.query(
+      const versionResult = await this.pool.query(
         "SELECT version(), current_database(), current_user, inet_server_addr(), inet_server_port()"
       );
       const version = versionResult.rows[0];
 
       // Check extensions
-      const extensionResult = await this.connectedClient.query(
+      const extensionResult = await this.pool.query(
         "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') as has_pg_stat_statements"
       );
 
       // Check permissions
-      const permissionsResult = await this.connectedClient.query(`
+      const permissionsResult = await this.pool.query(`
         SELECT 
           has_database_privilege(current_user, current_database(), 'CONNECT') as can_connect,
           has_schema_privilege(current_user, 'pg_catalog', 'USAGE') as can_use_catalog,
@@ -553,6 +654,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.isConnected = false;
+    this.connectionInfo = {};
   }
 
   async query(text: string, params: any[] = []): Promise<any> {
@@ -569,7 +671,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  getConnectionStatus(): { isConnected: boolean } {
-    return { isConnected: this.isConnected };
+  getConnectionStatus(): {
+    isConnected: boolean;
+    database?: string;
+    user?: string;
+    host?: string;
+    ssl?: boolean;
+  } {
+    return { isConnected: this.isConnected, ...this.connectionInfo };
   }
 }

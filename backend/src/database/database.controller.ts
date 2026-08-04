@@ -54,8 +54,14 @@ export class DatabaseController {
         );
       }
 
-      // Construct connection string
-      connectionString = `postgresql://${connectionDto.username}:${connectionDto.password}@${connectionDto.host}:${connectionDto.port || 5432}/${connectionDto.database}`;
+      // Construct connection string. Credentials are URL-encoded so that
+      // special characters (common in cloud passwords and Azure usernames
+      // like "admin@server") don't corrupt the URI.
+      const enc = encodeURIComponent;
+      const user = enc(connectionDto.username);
+      const pass = enc(connectionDto.password ?? "");
+      const db = enc(connectionDto.database);
+      connectionString = `postgresql://${user}:${pass}@${connectionDto.host}:${connectionDto.port || 5432}/${db}`;
       console.log(
         "[DatabaseController] Built connection string:",
         connectionString.replace(/\/\/[^@]+@/, "//***:***@")
@@ -69,11 +75,14 @@ export class DatabaseController {
     });
 
     if (!connected) {
+      const detail = this.databaseService.getLastError();
       console.error(
         "[DatabaseController] ❌ Connection failed, throwing HTTP exception"
       );
       throw new HttpException(
-        "Failed to connect to database",
+        detail
+          ? `Failed to connect to database: ${detail}`
+          : "Failed to connect to database",
         HttpStatus.BAD_REQUEST
       );
     }
