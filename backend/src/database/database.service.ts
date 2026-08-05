@@ -13,6 +13,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     host?: string;
     strategy?: string;
     ssl?: boolean;
+    serverVersionNum?: number;
+    serverVersion?: string;
   } = {};
 
   getLastError(): string | null {
@@ -418,7 +420,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
       // Test with a simple query
       const result = await client.query(
-        "SELECT version(), current_database(), current_user"
+        `SELECT version(), current_database(), current_user,
+                current_setting('server_version_num')::int AS server_version_num,
+                current_setting('server_version') AS server_version`
       );
 
       // Return the client to the pool — queries use pool.query(), so we do
@@ -433,6 +437,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         host: dbAnalysis.host,
         strategy: strategy.description,
         ssl: Boolean(strategy.ssl),
+        // Exposed so the UI can gate version-dependent features
+        // (e.g. EXPLAIN GENERIC_PLAN requires PostgreSQL 16+).
+        serverVersionNum: result.rows[0].server_version_num,
+        serverVersion: result.rows[0].server_version,
       };
 
       console.log(`[DatabaseService] ✅ SUCCESS with ${strategy.description}`);
@@ -677,6 +685,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     user?: string;
     host?: string;
     ssl?: boolean;
+    serverVersionNum?: number;
+    serverVersion?: string;
   } {
     return { isConnected: this.isConnected, ...this.connectionInfo };
   }

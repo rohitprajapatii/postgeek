@@ -167,7 +167,16 @@ export const api = {
   disconnect: () =>
     request<{ success: boolean; message: string }>("DELETE", "/database/disconnect"),
   status: () =>
-    request<{ isConnected: boolean; [k: string]: unknown }>("GET", "/database/status"),
+    request<{
+      isConnected: boolean;
+      database?: string;
+      user?: string;
+      host?: string;
+      ssl?: boolean;
+      serverVersionNum?: number;
+      serverVersion?: string;
+      [k: string]: unknown;
+    }>("GET", "/database/status"),
 
   // Health
   healthOverview: () => request<Row>("GET", "/health"),

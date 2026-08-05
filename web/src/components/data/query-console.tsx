@@ -6,6 +6,7 @@ import { api, ApiError, type PlanNode, type QueryResult } from "@/lib/api";
 import { Card, Badge, Button } from "@/components/ui/primitives";
 import { PlanViewer } from "./plan-viewer";
 import { buildExplainSql } from "@/lib/advisor";
+import { useConnection } from "@/lib/connection-context";
 import { AlertTriangle, GitBranch, Play, ShieldAlert, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatNumber, truncate } from "@/lib/format";
@@ -17,6 +18,7 @@ export function QueryConsole({ schema, table }: { schema: string; table: string 
   const [readonly, setReadonly] = useState(true);
   const [output, setOutput] = useState<Output | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { serverVersionNum } = useConnection();
 
   const run = useMutation({
     mutationFn: () => api.executeQuery(sql, readonly),
@@ -29,7 +31,8 @@ export function QueryConsole({ schema, table }: { schema: string; table: string 
 
   const explain = useMutation({
     mutationFn: async (analyze: boolean) => {
-      const built = buildExplainSql(sql, { analyze });
+      const built = buildExplainSql(sql, { analyze, serverVersionNum });
+      if (!built.supported) throw new ApiError(built.reason, 400);
       const res = await api.executeQuery(built.sql, true);
       const raw = res.data.rows[0]?.["QUERY PLAN"] as Array<{ Plan: PlanNode }> | undefined;
       if (!raw || !raw[0]?.Plan) throw new ApiError("Could not parse query plan", 500);

@@ -17,6 +17,9 @@ interface ConnectionState {
   apiUrl: string;
   database?: string;
   host?: string;
+  /** e.g. 160013 — used to gate version-dependent features. */
+  serverVersionNum?: number;
+  serverVersion?: string;
 }
 
 interface ConnectionContextValue extends ConnectionState {
@@ -44,8 +47,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         connected: Boolean(status.isConnected),
         checking: false,
         apiUrl: getApiUrl(),
-        database: (status.database as string) ?? s.database,
-        host: (status.host as string) ?? s.host,
+        database: status.database ?? s.database,
+        host: status.host ?? s.host,
+        serverVersionNum: status.serverVersionNum ?? s.serverVersionNum,
+        serverVersion: status.serverVersion ?? s.serverVersion,
       }));
     } catch {
       setState((s) => ({ ...s, connected: false, checking: false }));
@@ -58,6 +63,22 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const markConnected = useCallback((info: { database?: string; host?: string }) => {
     setState((s) => ({ ...s, connected: true, checking: false, ...info }));
+    // Pick up server-reported details (version, resolved database/user) without
+    // flipping `checking`, which would flash the loading screen after connect.
+    void api
+      .status()
+      .then((status) => {
+        setState((s) => ({
+          ...s,
+          database: status.database ?? s.database,
+          host: status.host ?? s.host,
+          serverVersionNum: status.serverVersionNum ?? s.serverVersionNum,
+          serverVersion: status.serverVersion ?? s.serverVersion,
+        }));
+      })
+      .catch(() => {
+        /* non-fatal: version-gated features fall back to attempting anyway */
+      });
   }, []);
 
   const updateApiUrl = useCallback((url: string) => {

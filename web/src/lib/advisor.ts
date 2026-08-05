@@ -367,31 +367,68 @@ export function isExplainable(query: string): boolean {
   return /^(SELECT|WITH|VALUES|TABLE)\b/.test(q);
 }
 
+/** EXPLAIN (GENERIC_PLAN) was introduced in PostgreSQL 16. */
+export const GENERIC_PLAN_MIN_VERSION = 160000;
+
+export type ExplainPlan =
+  | { supported: true; sql: string; analyzed: boolean; generic: boolean }
+  | { supported: false; reason: string; query: string };
+
+/** Render a server_version_num (e.g. 140012) as a human version (14.12). */
+export function formatServerVersion(versionNum?: number): string {
+  if (!versionNum) return "your server";
+  const major = Math.floor(versionNum / 10000);
+  const minor = versionNum % 10000;
+  return `PostgreSQL ${major}.${minor}`;
+}
+
 /**
  * Build the EXPLAIN statement for a query.
  *
  * pg_stat_statements normalises literals to `$1`, which a plain EXPLAIN
  * cannot plan. PostgreSQL 16+ handles this with GENERIC_PLAN — which cannot
  * be combined with ANALYZE, since there are no real values to execute with.
+ * On older servers there is no safe automatic substitute (injecting NULLs
+ * would produce a plan that misrepresents the real one), so we report the
+ * limitation instead and let the user supply values in the SQL console.
  */
 export function buildExplainSql(
   query: string,
-  opts: { analyze?: boolean } = {},
-): { sql: string; analyzed: boolean; generic: boolean } {
+  opts: { analyze?: boolean; serverVersionNum?: number } = {},
+): ExplainPlan {
   const trimmed = query.trim().replace(/;\s*$/, "");
+
   if (isParameterized(trimmed)) {
+    const version = opts.serverVersionNum;
+    // Only block when we positively know the server is too old; if the
+    // version is unknown, attempt it and let the server decide.
+    if (version !== undefined && version > 0 && version < GENERIC_PLAN_MIN_VERSION) {
+      return {
+        supported: false,
+        query: trimmed,
+        reason: `This statement is stored with normalised parameters ($1, $2). Planning it without values needs EXPLAIN (GENERIC_PLAN), which requires PostgreSQL 16 or newer — this server is ${formatServerVersion(version)}. Copy the query into the SQL console and substitute real values to see its plan.`,
+      };
+    }
     return {
+      supported: true,
       sql: `EXPLAIN (GENERIC_PLAN, FORMAT JSON) ${trimmed}`,
       analyzed: false,
       generic: true,
     };
   }
+
   if (opts.analyze) {
     return {
+      supported: true,
       sql: `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${trimmed}`,
       analyzed: true,
       generic: false,
     };
   }
-  return { sql: `EXPLAIN (FORMAT JSON) ${trimmed}`, analyzed: false, generic: false };
+  return {
+    supported: true,
+    sql: `EXPLAIN (FORMAT JSON) ${trimmed}`,
+    analyzed: false,
+    generic: false,
+  };
 }
