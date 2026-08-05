@@ -42,12 +42,20 @@ docker compose up -d --build
 
 Then open:
 
-- Frontend (NGINX): http://localhost:8081
+- Web app (Next.js): http://localhost:3001 — recommended
+- Flutter client (NGINX): http://localhost:8081
 - Backend API (NestJS): http://localhost:3000/api/health
+
+To skip the Flutter image entirely (much faster build):
+
+```bash
+docker compose up -d --build backend web
+```
 
 Notes:
 
-- First build will download Flutter/Dart toolchains and may take a few minutes.
+- Building the Flutter client downloads the Flutter/Dart toolchains and may
+  take several minutes. The `backend` + `web` services build in seconds.
 
 ---
 
@@ -100,11 +108,17 @@ Place the following images under `docs/screenshots/` to render inline.
 ```text
 postgeek/
   backend/           # NestJS API (port 3000, path prefix /api)
-  frontend/          # Flutter Web app
+  web/               # Next.js web app (port 3001) — lightweight, recommended
+  frontend/          # Flutter Web app (port 8081) — original client
   docker/            # NGINX config and helpers
   Dockerfile         # Multi-stage build (backend + Flutter web + nginx)
-  docker-compose.yml # Run backend + frontend together
+  docker-compose.yml # Run backend + both frontends together
 ```
+
+There are two interchangeable frontends talking to the same API. `web/` is the
+Next.js client — it ships ~90 kB of shared JS versus the multi-MB Flutter
+runtime, so it starts faster and is the recommended daily driver. See
+[`web/README.md`](web/README.md) for details.
 
 ---
 
@@ -134,28 +148,28 @@ Option A — Docker (recommended):
 docker compose up -d --build
 ```
 
-Option B — Run services locally:
-
-1. Backend (Node 18+)
+Option B — Next.js web app (fastest local setup, Node 18+ only):
 
 ```bash
-cd backend
-npm install
-npm run start:dev
+npm install       # root tooling
+npm run setup     # installs backend/ and web/ dependencies
+npm run dev       # starts the API (:3000) and the web app (:3001)
 ```
 
-2. Frontend (Flutter 3.22+ recommended)
+Then open http://localhost:3001 and enter your database credentials.
+No Flutter toolchain required.
+
+Option C — Flutter client (Flutter 3.22+):
 
 ```bash
-cd frontend
-flutter pub get
-flutter run -d chrome
+npm run setup:flutter
+npm run dev:flutter
 ```
 
-Convenience from monorepo root:
+Production build for the Next.js stack:
 
 ```bash
-npm run start:dev
+npm run build && npm start
 ```
 
 ---

@@ -12,39 +12,50 @@ export class HealthService {
       return { connected: false };
     }
 
-    // Compile health metrics
-    try {
-      const [
-        vacuumStatus,
-        connectionCount,
-        deadlocks,
-        cacheHitRatio,
-        dbSize,
-        replicationStatus,
-      ] = await Promise.all([
-        this.getVacuumStatus(),
-        this.getConnectionCount(),
-        this.getDeadlocks(),
-        this.getCacheHitRatio(),
-        this.getDatabaseSize(),
-        this.getReplicationStatus(),
-      ]);
+    // Each metric is resolved independently: managed databases frequently
+    // restrict access to individual catalog views (pg_stat_replication is a
+    // common one), and a single failure must not blank out the whole page.
+    const [
+      vacuumStatus,
+      connectionCount,
+      deadlocks,
+      cacheHitRatio,
+      dbSize,
+      replicationStatus,
+    ] = await Promise.all([
+      this.safeMetric("vacuum_status", () => this.getVacuumStatus(), []),
+      this.safeMetric("connection_count", () => this.getConnectionCount(), null),
+      this.safeMetric("deadlocks", () => this.getDeadlocks(), null),
+      this.safeMetric("cache_hit_ratio", () => this.getCacheHitRatio(), null),
+      this.safeMetric("database_size", () => this.getDatabaseSize(), null),
+      this.safeMetric("replication", () => this.getReplicationStatus(), []),
+    ]);
 
-      return {
-        connected: true,
-        vacuum_status: vacuumStatus,
-        connection_count: connectionCount,
-        deadlocks,
-        cache_hit_ratio: cacheHitRatio,
-        database_size: dbSize,
-        replication: replicationStatus,
-      };
+    return {
+      connected: true,
+      vacuum_status: vacuumStatus,
+      connection_count: connectionCount,
+      deadlocks,
+      cache_hit_ratio: cacheHitRatio,
+      database_size: dbSize,
+      replication: replicationStatus,
+    };
+  }
+
+  /**
+   * Run a single health metric, degrading to a fallback (and an inline error
+   * marker) instead of rejecting the whole overview.
+   */
+  private async safeMetric<T>(
+    name: string,
+    fn: () => Promise<T>,
+    fallback: T
+  ): Promise<T | { error: string }> {
+    try {
+      return await fn();
     } catch (error) {
-      console.error("Error fetching health overview:", error);
-      return {
-        connected: true,
-        error: error.message,
-      };
+      console.warn(`[HealthService] Metric "${name}" unavailable:`, error.message);
+      return fallback === null ? { error: error.message } : fallback;
     }
   }
 
@@ -106,11 +117,15 @@ export class HealthService {
   }
 
   private async getCacheHitRatio() {
+    // NULLIF guards a brand-new database where no table has served a single
+    // block yet (0 hits + 0 reads), which previously raised "division by zero"
+    // and failed the whole health overview.
     const cacheHitQuery = `
       SELECT
-        SUM(heap_blks_read) as heap_read,
-        SUM(heap_blks_hit) as heap_hit,
-        SUM(heap_blks_hit) / (SUM(heap_blks_hit) + SUM(heap_blks_read)) as ratio
+        COALESCE(SUM(heap_blks_read), 0) as heap_read,
+        COALESCE(SUM(heap_blks_hit), 0) as heap_hit,
+        SUM(heap_blks_hit)::numeric
+          / NULLIF(SUM(heap_blks_hit) + SUM(heap_blks_read), 0) as ratio
       FROM pg_statio_user_tables;
     `;
 
