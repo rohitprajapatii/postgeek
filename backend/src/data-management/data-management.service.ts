@@ -96,15 +96,20 @@ export class DataManagementService {
    */
   async getSchemas(): Promise<SchemaInfo[]> {
     this.checkConnection();
+    // Planner estimate (reltuples) keeps the schema tree fast on large
+    // databases. An exact COUNT(*) per table would be O(tables) sequential
+    // scans just to render the sidebar.
     const query = `
-      SELECT 
-        pt.schemaname as schema_name,
-        pt.tablename as table_name,
-        COALESCE(pst.n_tup_ins + pst.n_tup_upd + pst.n_tup_del, 0) as estimated_rows
-      FROM pg_tables pt
-      LEFT JOIN pg_stat_user_tables pst ON pt.tablename = pst.relname AND pt.schemaname = pst.schemaname
-      WHERE pt.schemaname NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
-      ORDER BY pt.schemaname, pt.tablename;
+      SELECT
+        n.nspname AS schema_name,
+        c.relname AS table_name,
+        GREATEST(c.reltuples, 0)::bigint AS estimated_rows
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relkind IN ('r', 'p')
+        AND n.nspname NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
+        AND has_table_privilege(c.oid, 'SELECT')
+      ORDER BY n.nspname, c.relname;
     `;
 
     const result = await this.databaseService.query(query);
@@ -222,93 +227,94 @@ export class DataManagementService {
 
     const dataResult = await this.databaseService.query(dataQuery, queryParams);
 
-    // Get table info to identify foreign key columns
-    const tableInfo = await this.getTableInfo(schemaName, tableName);
-    const foreignKeyColumns = tableInfo.columns.filter(
+    // Relation metadata. Only the column list is needed here, so we avoid the
+    // full getTableInfo() round trip (which would repeat the COUNT(*) above).
+    const [columnInfo, reverseRelations] = await Promise.all([
+      this.getTableColumns(schemaName, tableName),
+      this.getReverseRelations(schemaName, tableName),
+    ]);
+    const foreignKeyColumns = columnInfo.filter(
       (col) => col.isForeignKey && col.references
     );
 
-    // Get reverse relations for this table
-    const reverseRelations = await this.getReverseRelations(
-      schemaName,
-      tableName
-    );
+    // Resolve every relation with a bounded number of set-based queries
+    // instead of one query per row per relation (which was O(rows × relations)
+    // round trips and dominated page-load time on remote databases).
+    const [forwardMaps, reverseMaps] = await Promise.all([
+      Promise.all(
+        foreignKeyColumns.map(async (column) => {
+          const values = Array.from(
+            new Set(
+              dataResult.rows
+                .map((r) => r[column.columnName])
+                .filter((v) => v !== null && v !== undefined)
+            )
+          );
+          const map = await this.batchLookupByColumn(
+            column.references!.schema,
+            column.references!.table,
+            column.references!.column,
+            values
+          );
+          return { column, map };
+        })
+      ),
+      Promise.all(
+        reverseRelations.map(async (rr) => {
+          const values = Array.from(
+            new Set(
+              dataResult.rows
+                .map((r) => r[rr.referencedColumn])
+                .filter((v) => v !== null && v !== undefined)
+            )
+          );
+          const counts = await this.batchCountByColumn(
+            rr.referencingSchema,
+            rr.referencingTable,
+            rr.referencingColumn,
+            values
+          );
+          return { rr, counts };
+        })
+      ),
+    ]);
 
-    // Enhance data with relation information
-    const enhancedData = await Promise.all(
-      dataResult.rows.map(async (row) => {
-        const relations: { [columnName: string]: any } = {};
-        const reverseRelationsData: { [relationKey: string]: any } = {};
+    const enhancedData = dataResult.rows.map((row) => {
+      const relations: { [columnName: string]: any } = {};
+      const reverseRelationsData: { [relationKey: string]: any } = {};
 
-        // For each foreign key column, fetch related data
-        for (const column of foreignKeyColumns) {
-          const foreignKeyValue = row[column.columnName];
-          if (foreignKeyValue != null && column.references) {
-            try {
-              const relatedData = await this.getForeignKeyData(
-                column.references.schema,
-                column.references.table,
-                column.references.column,
-                foreignKeyValue
-              );
-
-              relations[column.columnName] = {
-                columnName: column.columnName,
-                referencedTable: column.references.table,
-                referencedColumn: column.references.column,
-                referencedSchema: column.references.schema,
-                relatedRecords: relatedData,
-              };
-            } catch (error) {
-              // If there's an error fetching related data, just skip it
-              console.warn(
-                `Failed to fetch related data for ${column.columnName}:`,
-                error
-              );
-            }
-          }
-        }
-
-        // For each reverse relation, get the count of related records
-        for (const reverseRelation of reverseRelations) {
-          const recordId = row[reverseRelation.referencedColumn];
-          if (recordId != null) {
-            try {
-              const reverseRelationData = await this.getReverseRelationData(
-                schemaName,
-                tableName,
-                recordId,
-                reverseRelation.referencedColumn,
-                reverseRelation.referencingSchema,
-                reverseRelation.referencingTable,
-                reverseRelation.referencingColumn,
-                { limit: 1, page: 1 } // Just get count, not data
-              );
-
-              const relationKey = `${reverseRelation.referencingSchema}.${reverseRelation.referencingTable}.${reverseRelation.referencingColumn}`;
-              reverseRelationsData[relationKey] = {
-                referencingTable: reverseRelation.referencingTable,
-                referencingSchema: reverseRelation.referencingSchema,
-                referencingColumn: reverseRelation.referencingColumn,
-                relationCount: reverseRelationData.totalCount,
-              };
-            } catch (error) {
-              // If there's an error fetching reverse relation data, just skip it
-              console.warn(
-                `Failed to fetch reverse relation data for ${reverseRelation.referencingTable}:`,
-                error
-              );
-            }
-          }
-        }
-
-        return {
-          ...row,
-          _relations: relations,
-          _reverseRelations: reverseRelationsData,
+      for (const { column, map } of forwardMaps) {
+        const value = row[column.columnName];
+        if (value === null || value === undefined) continue;
+        const relatedRecords = map.get(String(value));
+        if (!relatedRecords || !relatedRecords.length) continue;
+        relations[column.columnName] = {
+          columnName: column.columnName,
+          referencedTable: column.references!.table,
+          referencedColumn: column.references!.column,
+          referencedSchema: column.references!.schema,
+          relatedRecords,
         };
-      })
-    );
+      }
+
+      for (const { rr, counts } of reverseMaps) {
+        const recordId = row[rr.referencedColumn];
+        if (recordId === null || recordId === undefined) continue;
+        const relationKey = `${rr.referencingSchema}.${rr.referencingTable}.${rr.referencingColumn}`;
+        reverseRelationsData[relationKey] = {
+          referencingTable: rr.referencingTable,
+          referencingSchema: rr.referencingSchema,
+          referencingColumn: rr.referencingColumn,
+          relationCount: counts.get(String(recordId)) ?? 0,
+        };
+      }
+
+      return {
+        ...row,
+        _relations: relations,
+        _reverseRelations: reverseRelationsData,
+      };
+    });
 
     return {
       data: enhancedData,
@@ -558,6 +564,77 @@ export class DataManagementService {
   }
 
   /**
+   * Fetch all rows whose `column` matches any of `values`, grouped by value.
+   * One query for the whole page instead of one per row.
+   */
+  private async batchLookupByColumn(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    values: any[]
+  ): Promise<Map<string, any[]>> {
+    const grouped = new Map<string, any[]>();
+    if (!values.length) return grouped;
+
+    const qualified = this.getQualifiedTableName(schemaName, tableName);
+    const quotedColumn = this.quoteIdentifier(columnName);
+
+    try {
+      const result = await this.databaseService.query(
+        `SELECT * FROM ${qualified} WHERE ${quotedColumn} = ANY($1)`,
+        [values]
+      );
+      for (const row of result.rows) {
+        const key = String(row[columnName]);
+        const bucket = grouped.get(key);
+        if (bucket) bucket.push(row);
+        else grouped.set(key, [row]);
+      }
+    } catch (error) {
+      console.warn(
+        `[DataManagement] Batch relation lookup failed for ${schemaName}.${tableName}.${columnName}:`,
+        error.message
+      );
+    }
+    return grouped;
+  }
+
+  /**
+   * Count referencing rows per key value in a single grouped query.
+   */
+  private async batchCountByColumn(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    values: any[]
+  ): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (!values.length) return counts;
+
+    const qualified = this.getQualifiedTableName(schemaName, tableName);
+    const quotedColumn = this.quoteIdentifier(columnName);
+
+    try {
+      const result = await this.databaseService.query(
+        `SELECT ${quotedColumn} AS key, COUNT(*)::bigint AS total
+         FROM ${qualified}
+         WHERE ${quotedColumn} = ANY($1)
+         GROUP BY ${quotedColumn}`,
+        [values]
+      );
+      for (const row of result.rows) {
+        counts.set(String(row.key), parseInt(row.total) || 0);
+      }
+    } catch (error) {
+      console.warn(
+        `[DataManagement] Batch relation count failed for ${schemaName}.${tableName}.${columnName}:`,
+        error.message
+      );
+    }
+    return counts;
+  }
+
+  /**
    * Get reverse relations for a table (tables that reference this table)
    */
   async getReverseRelations(
@@ -571,21 +648,28 @@ export class DataManagementService {
       referencedColumn: string;
     }>
   > {
+    // pg_catalog with ordinal-matched key columns: joining information_schema
+    // on constraint_name alone cross-produces the columns of composite foreign
+    // keys and can collide across schemas.
     const query = `
       SELECT DISTINCT
-        tc.table_schema AS referencing_schema,
-        tc.table_name AS referencing_table,
-        kcu.column_name AS referencing_column,
-        ccu.column_name AS referenced_column
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu ON 
-        tc.constraint_name = kcu.constraint_name
-      JOIN information_schema.constraint_column_usage ccu ON 
-        ccu.constraint_name = tc.constraint_name
-      WHERE tc.constraint_type = 'FOREIGN KEY'
-        AND ccu.table_schema = $1
-        AND ccu.table_name = $2
-      ORDER BY tc.table_schema, tc.table_name, kcu.column_name;
+        cns.nspname AS referencing_schema,
+        cc.relname  AS referencing_table,
+        ca.attname  AS referencing_column,
+        ra.attname  AS referenced_column
+      FROM pg_constraint con
+      JOIN pg_class cc      ON cc.oid = con.conrelid
+      JOIN pg_namespace cns ON cns.oid = cc.relnamespace
+      JOIN pg_class rc      ON rc.oid = con.confrelid
+      JOIN pg_namespace rns ON rns.oid = rc.relnamespace
+      JOIN LATERAL unnest(con.conkey, con.confkey)
+        WITH ORDINALITY AS u(att, refatt, ord) ON true
+      JOIN pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = u.att
+      JOIN pg_attribute ra ON ra.attrelid = con.confrelid AND ra.attnum = u.refatt
+      WHERE con.contype = 'f'
+        AND rns.nspname = $1
+        AND rc.relname = $2
+      ORDER BY 1, 2, 3;
     `;
 
     const result = await this.databaseService.query(query, [
@@ -718,47 +802,60 @@ export class DataManagementService {
     schemaName: string,
     tableName: string
   ): Promise<ColumnInfo[]> {
+    // Primary/foreign keys are resolved through pg_catalog rather than
+    // information_schema. The information_schema joins matched constraints by
+    // name only, which duplicated columns that belong to more than one
+    // constraint (e.g. a composite PK column that is also a FK) and flagged
+    // UNIQUE columns as primary keys.
     const query = `
-      SELECT 
+      WITH rel AS (
+        SELECT c.oid
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = $1 AND c.relname = $2
+      ),
+      pk AS (
+        SELECT a.attname
+        FROM pg_constraint con
+        JOIN rel ON rel.oid = con.conrelid
+        JOIN pg_attribute a
+          ON a.attrelid = con.conrelid AND a.attnum = ANY(con.conkey)
+        WHERE con.contype = 'p'
+      ),
+      fk AS (
+        SELECT DISTINCT ON (a.attname)
+          a.attname            AS column_name,
+          fns.nspname          AS foreign_table_schema,
+          fc.relname           AS foreign_table_name,
+          fa.attname           AS foreign_column_name
+        FROM pg_constraint con
+        JOIN rel ON rel.oid = con.conrelid
+        JOIN LATERAL unnest(con.conkey, con.confkey)
+          WITH ORDINALITY AS u(att, refatt, ord) ON true
+        JOIN pg_attribute a   ON a.attrelid = con.conrelid AND a.attnum = u.att
+        JOIN pg_class fc      ON fc.oid = con.confrelid
+        JOIN pg_namespace fns ON fns.oid = fc.relnamespace
+        JOIN pg_attribute fa  ON fa.attrelid = con.confrelid AND fa.attnum = u.refatt
+        WHERE con.contype = 'f'
+        ORDER BY a.attname, con.oid
+      )
+      SELECT
         c.column_name,
         c.data_type,
-        c.is_nullable::boolean,
+        c.is_nullable,
         c.column_default,
         c.character_maximum_length,
         c.numeric_precision,
         c.numeric_scale,
-        c.is_identity::boolean,
-        CASE WHEN kcu.column_name IS NOT NULL THEN true ELSE false END as is_primary_key,
-        CASE WHEN fkc.column_name IS NOT NULL THEN true ELSE false END as is_foreign_key,
-        fkc.foreign_table_schema,
-        fkc.foreign_table_name,
-        fkc.foreign_column_name
+        c.is_identity,
+        (pk.attname IS NOT NULL)     AS is_primary_key,
+        (fk.column_name IS NOT NULL) AS is_foreign_key,
+        fk.foreign_table_schema,
+        fk.foreign_table_name,
+        fk.foreign_column_name
       FROM information_schema.columns c
-      LEFT JOIN information_schema.key_column_usage kcu ON 
-        c.table_schema = kcu.table_schema AND 
-        c.table_name = kcu.table_name AND 
-        c.column_name = kcu.column_name
-      LEFT JOIN information_schema.table_constraints tc ON 
-        kcu.constraint_name = tc.constraint_name AND 
-        tc.constraint_type = 'PRIMARY KEY'
-      LEFT JOIN (
-        SELECT
-          kcu.column_name,
-          kcu.table_schema,
-          kcu.table_name,
-          ccu.table_schema AS foreign_table_schema,
-          ccu.table_name AS foreign_table_name,
-          ccu.column_name AS foreign_column_name
-        FROM information_schema.key_column_usage kcu
-        JOIN information_schema.table_constraints tc ON 
-          kcu.constraint_name = tc.constraint_name
-        JOIN information_schema.constraint_column_usage ccu ON 
-          ccu.constraint_name = tc.constraint_name
-        WHERE tc.constraint_type = 'FOREIGN KEY'
-      ) fkc ON 
-        c.table_schema = fkc.table_schema AND 
-        c.table_name = fkc.table_name AND 
-        c.column_name = fkc.column_name
+      LEFT JOIN pk ON pk.attname = c.column_name
+      LEFT JOIN fk ON fk.column_name = c.column_name
       WHERE c.table_schema = $1 AND c.table_name = $2
       ORDER BY c.ordinal_position;
     `;
@@ -795,19 +892,24 @@ export class DataManagementService {
   ): Promise<ForeignKeyInfo[]> {
     const query = `
       SELECT
-        tc.constraint_name,
-        kcu.column_name,
-        ccu.table_schema AS foreign_table_schema,
-        ccu.table_name AS foreign_table_name,
-        ccu.column_name AS foreign_column_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu ON 
-        tc.constraint_name = kcu.constraint_name
-      JOIN information_schema.constraint_column_usage ccu ON 
-        ccu.constraint_name = tc.constraint_name
-      WHERE tc.constraint_type = 'FOREIGN KEY'
-        AND tc.table_schema = $1
-        AND tc.table_name = $2;
+        con.conname          AS constraint_name,
+        ca.attname           AS column_name,
+        fns.nspname          AS foreign_table_schema,
+        fc.relname           AS foreign_table_name,
+        fa.attname           AS foreign_column_name
+      FROM pg_constraint con
+      JOIN pg_class c       ON c.oid = con.conrelid
+      JOIN pg_namespace n   ON n.oid = c.relnamespace
+      JOIN pg_class fc      ON fc.oid = con.confrelid
+      JOIN pg_namespace fns ON fns.oid = fc.relnamespace
+      JOIN LATERAL unnest(con.conkey, con.confkey)
+        WITH ORDINALITY AS u(att, refatt, ord) ON true
+      JOIN pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = u.att
+      JOIN pg_attribute fa ON fa.attrelid = con.confrelid AND fa.attnum = u.refatt
+      WHERE con.contype = 'f'
+        AND n.nspname = $1
+        AND c.relname = $2
+      ORDER BY con.conname, u.ord;
     `;
 
     const result = await this.databaseService.query(query, [
@@ -828,18 +930,26 @@ export class DataManagementService {
     schemaName: string,
     tableName: string
   ): Promise<IndexInfo[]> {
+    // Resolved via pg_index so that primary keys are identified by
+    // indisprimary (not a "%_pkey" name heuristic) and indexes are scoped to
+    // the requested schema (the old pg_class join matched on relname alone,
+    // so same-named tables in other schemas produced duplicates).
     const query = `
       SELECT
-        i.indexname,
-        i.indexdef,
-        CASE WHEN i.indexname LIKE '%_pkey' THEN true ELSE false END as is_primary,
-        CASE WHEN ix.indisunique THEN true ELSE false END as is_unique
-      FROM pg_indexes i
-      JOIN pg_class t ON t.relname = i.tablename
-      JOIN pg_index ix ON ix.indexrelid = (
-        SELECT oid FROM pg_class WHERE relname = i.indexname
-      )
-      WHERE i.schemaname = $1 AND i.tablename = $2;
+        ic.relname                                   AS index_name,
+        ix.indisunique                               AS is_unique,
+        ix.indisprimary                              AS is_primary,
+        ARRAY(
+          SELECT pg_get_indexdef(ix.indexrelid, k.ord::int, true)
+          FROM unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord)
+          ORDER BY k.ord
+        )                                            AS columns
+      FROM pg_index ix
+      JOIN pg_class tc  ON tc.oid = ix.indrelid
+      JOIN pg_class ic  ON ic.oid = ix.indexrelid
+      JOIN pg_namespace n ON n.oid = tc.relnamespace
+      WHERE n.nspname = $1 AND tc.relname = $2
+      ORDER BY ix.indisprimary DESC, ic.relname;
     `;
 
     const result = await this.databaseService.query(query, [
@@ -847,36 +957,39 @@ export class DataManagementService {
       tableName,
     ]);
 
-    return result.rows.map((row) => {
-      // Extract column names from index definition
-      const columns = this.extractColumnsFromIndexDef(row.indexdef);
-
-      return {
-        indexName: row.indexname,
-        columns,
-        isUnique: row.is_unique,
-        isPrimary: row.is_primary,
-      };
-    });
+    return result.rows.map((row) => ({
+      indexName: row.index_name,
+      columns: (row.columns || []).filter((c: string) => c && c.length > 0),
+      isUnique: row.is_unique,
+      isPrimary: row.is_primary,
+    }));
   }
 
   private async getTableRowCount(
     schemaName: string,
     tableName: string
   ): Promise<number> {
-    const query = `
-      SELECT n_tup_ins + n_tup_upd + n_tup_del as estimated_rows
-      FROM pg_stat_user_tables
-      WHERE schemaname = $1 AND relname = $2;
-    `;
-
-    const result = await this.databaseService.query(query, [
-      schemaName,
-      tableName,
-    ]);
-    return result.rows.length > 0
-      ? parseInt(result.rows[0].estimated_rows) || 0
-      : 0;
+    // Exact count for the single table being inspected. (The previous
+    // implementation summed n_tup_ins + n_tup_upd + n_tup_del, which is
+    // cumulative write activity, not a row count.)
+    const qualified = this.getQualifiedTableName(schemaName, tableName);
+    try {
+      const result = await this.databaseService.query(
+        `SELECT COUNT(*)::bigint AS exact_rows FROM ${qualified}`
+      );
+      return parseInt(result.rows[0].exact_rows) || 0;
+    } catch {
+      // Fall back to the planner estimate if the exact count fails
+      // (permissions, very large table with a statement timeout, ...).
+      const est = await this.databaseService.query(
+        `SELECT GREATEST(c.reltuples, 0)::bigint AS estimated_rows
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = $1 AND c.relname = $2`,
+        [schemaName, tableName]
+      );
+      return est.rows.length ? parseInt(est.rows[0].estimated_rows) || 0 : 0;
+    }
   }
 
   private formatFilterValue(filter: FilterCondition): any {

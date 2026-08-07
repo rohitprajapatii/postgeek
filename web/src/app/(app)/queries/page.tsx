@@ -1,8 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type Row } from "@/lib/api";
+import { api, type PlanNode, type Row } from "@/lib/api";
+import { analyzeQueryStats, buildExplainSql, isExplainable } from "@/lib/advisor";
+import { CopyableSql, FindingsList, SeveritySummary } from "@/components/data/findings";
+import { useConnection } from "@/lib/connection-context";
+import { PlanViewer } from "@/components/data/plan-viewer";
 import { StatCard } from "@/components/ui/stat-card";
 import { Card, CardHeader, Badge, Button, EmptyState } from "@/components/ui/primitives";
 import { CardSkeleton, QueryError, TableSkeleton } from "@/components/ui/states";
@@ -15,7 +19,7 @@ import {
   toNumber,
   truncate,
 } from "@/lib/format";
-import { AlertCircle, ChevronDown, Database, Gauge, Hash, RotateCcw, Sparkles, Timer } from "lucide-react";
+import { AlertCircle, ChevronDown, Database, Gauge, GitBranch, Hash, Info, RotateCcw, Sparkles, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function hasError(data: unknown): data is { error: string; hint?: string } {
@@ -163,7 +167,12 @@ export default function QueriesPage() {
             ) : slowRows.length ? (
               <div className="divide-y divide-slate-100">
                 {slowRows.map((q, i) => (
-                  <SlowQueryRow key={i} row={q} rank={i + 1} />
+                  <SlowQueryRow
+                    key={i}
+                    row={q}
+                    rank={i + 1}
+                    totalExecTimeMs={toNumber(st.total_exec_time_ms)}
+                  />
                 ))}
               </div>
             ) : (
@@ -179,8 +188,43 @@ export default function QueriesPage() {
   );
 }
 
-function SlowQueryRow({ row, rank }: { row: Row; rank: number }) {
+function SlowQueryRow({
+  row,
+  rank,
+  totalExecTimeMs,
+}: {
+  row: Row;
+  rank: number;
+  totalExecTimeMs: number;
+}) {
   const [open, setOpen] = useState(false);
+  const sql = compactQuery(row.query);
+
+  const findings = useMemo(
+    () => analyzeQueryStats(row, { totalExecTimeMs }),
+    [row, totalExecTimeMs],
+  );
+
+  const { serverVersionNum } = useConnection();
+  const built = useMemo(
+    () => buildExplainSql(sql, { serverVersionNum }),
+    [sql, serverVersionNum],
+  );
+
+  const explain = useMutation({
+    mutationFn: async () => {
+      if (!built.supported) throw new Error(built.reason);
+      const res = await api.executeQuery(built.sql, true);
+      const raw = res.data.rows[0]?.["QUERY PLAN"] as Array<{ Plan: PlanNode }> | undefined;
+      if (!raw?.[0]?.Plan) throw new Error("Could not parse the query plan");
+      return { plan: raw[0].Plan, analyzed: built.analyzed, generic: built.generic };
+    },
+  });
+
+  const explainable = isExplainable(sql);
+  const explainError =
+    explain.error instanceof Error ? explain.error.message : null;
+
   return (
     <div className="px-5 py-3">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-start gap-3 text-left">
@@ -188,23 +232,94 @@ function SlowQueryRow({ row, rank }: { row: Row; rank: number }) {
           {rank}
         </span>
         <code className="min-w-0 flex-1 font-mono text-xs text-ink">
-          {open ? compactQuery(row.query) : truncate(compactQuery(row.query), 120)}
+          {open ? sql : truncate(sql, 120)}
         </code>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
+          <SeveritySummary findings={findings} />
           <Badge tone="amber">{formatMs(row.total_time_ms)}</Badge>
           <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", open && "rotate-180")} />
         </div>
       </button>
+
       {open ? (
-        <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 pl-9 text-xs sm:grid-cols-4">
-          <Metric label="Calls" value={formatNumber(row.calls)} />
-          <Metric label="Mean" value={formatMs(row.avg_time_ms)} />
-          <Metric label="Min" value={formatMs(row.min_time_ms)} />
-          <Metric label="Max" value={formatMs(row.max_time_ms)} />
-          <Metric label="Rows" value={formatNumber(row.rows)} />
-          <Metric label="Shared hit" value={formatNumber(row.shared_blks_hit)} />
-          <Metric label="Shared read" value={formatNumber(row.shared_blks_read)} />
-          <Metric label="Stddev" value={formatMs(row.stddev_time_ms)} />
+        <div className="mt-3 space-y-4 pl-9">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-4">
+            <Metric label="Calls" value={formatNumber(row.calls)} />
+            <Metric label="Mean" value={formatMs(row.avg_time_ms)} />
+            <Metric label="Min" value={formatMs(row.min_time_ms)} />
+            <Metric label="Max" value={formatMs(row.max_time_ms)} />
+            <Metric label="Rows" value={formatNumber(row.rows)} />
+            <Metric label="Shared hit" value={formatNumber(row.shared_blks_hit)} />
+            <Metric label="Shared read" value={formatNumber(row.shared_blks_read)} />
+            <Metric label="Stddev" value={formatMs(row.stddev_time_ms)} />
+          </div>
+
+          <div>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                Analysis
+              </h4>
+              {!explainable ? (
+                <span className="text-[11px] text-ink-muted">
+                  Plan unavailable for non-SELECT statements
+                </span>
+              ) : built.supported ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={explain.isPending}
+                  onClick={() => explain.mutate()}
+                >
+                  <GitBranch className="h-3.5 w-3.5" />
+                  {explain.data ? "Re-run plan" : "Explain"}
+                </Button>
+              ) : null}
+            </div>
+            <FindingsList findings={findings} />
+          </div>
+
+          {explainable && !built.supported ? (
+            <div className="rounded-xl border border-slate-200 bg-surface-subtle p-3.5">
+              <div className="flex items-start gap-2.5">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-ink">
+                    Query plan needs PostgreSQL 16+
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+                    {built.reason}
+                  </p>
+                  <CopyableSql sql={built.query} />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {explainError ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              <span className="font-mono">{explainError}</span>
+            </div>
+          ) : null}
+
+          {explain.data ? (
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+                  Query plan
+                </h4>
+                {explain.data.generic ? (
+                  <Badge tone="violet">generic plan</Badge>
+                ) : null}
+              </div>
+              {explain.data.generic ? (
+                <p className="mb-2 text-[11px] text-ink-muted">
+                  This statement is stored with normalised parameters ($1, $2), so the
+                  plan is generated without real values and has no runtime timings.
+                </p>
+              ) : null}
+              <PlanViewer plan={explain.data.plan} analyzed={explain.data.analyzed} />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

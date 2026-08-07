@@ -32,6 +32,9 @@ export default function HealthPage() {
   const deadlocks = (hl.deadlocks ?? {}) as Row;
   const vacuum = Array.isArray(hl.vacuum_status) ? (hl.vacuum_status as Row[]) : [];
 
+  // ratio is null until the database has served at least one table block
+  // (brand-new database) — don't render that as a red 0%.
+  const hasCacheData = cache.ratio !== null && cache.ratio !== undefined;
   const cacheRatio = toNumber(cache.ratio) * 100;
   const usedConn = toNumber(conn.used);
   const freeConn = toNumber(conn.free);
@@ -51,10 +54,24 @@ export default function HealthPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Cache hit ratio"
-            value={formatPercent(cacheRatio)}
+            value={hasCacheData ? formatPercent(cacheRatio) : "—"}
             icon={Gauge}
-            tone={cacheRatio >= 95 ? "teal" : cacheRatio >= 90 ? "amber" : "rose"}
-            hint={cacheRatio >= 99 ? "Excellent" : "From heap reads"}
+            tone={
+              !hasCacheData
+                ? "neutral"
+                : cacheRatio >= 95
+                  ? "teal"
+                  : cacheRatio >= 90
+                    ? "amber"
+                    : "rose"
+            }
+            hint={
+              !hasCacheData
+                ? "No table I/O recorded yet"
+                : cacheRatio >= 99
+                  ? "Excellent"
+                  : "From heap reads"
+            }
           />
           <StatCard label="Database size" value={String(dbSize.pretty_size ?? "—")} icon={HardDrive} tone="brand" />
           <StatCard

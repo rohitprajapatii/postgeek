@@ -5,6 +5,8 @@ import { useMutation } from "@tanstack/react-query";
 import { api, ApiError, type PlanNode, type QueryResult } from "@/lib/api";
 import { Card, Badge, Button } from "@/components/ui/primitives";
 import { PlanViewer } from "./plan-viewer";
+import { buildExplainSql } from "@/lib/advisor";
+import { useConnection } from "@/lib/connection-context";
 import { AlertTriangle, GitBranch, Play, ShieldAlert, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatNumber, truncate } from "@/lib/format";
@@ -16,6 +18,7 @@ export function QueryConsole({ schema, table }: { schema: string; table: string 
   const [readonly, setReadonly] = useState(true);
   const [output, setOutput] = useState<Output | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { serverVersionNum } = useConnection();
 
   const run = useMutation({
     mutationFn: () => api.executeQuery(sql, readonly),
@@ -28,11 +31,12 @@ export function QueryConsole({ schema, table }: { schema: string; table: string 
 
   const explain = useMutation({
     mutationFn: async (analyze: boolean) => {
-      const opts = analyze ? "ANALYZE, BUFFERS, FORMAT JSON" : "FORMAT JSON";
-      const res = await api.executeQuery(`EXPLAIN (${opts}) ${sql}`, true);
+      const built = buildExplainSql(sql, { analyze, serverVersionNum });
+      if (!built.supported) throw new ApiError(built.reason, 400);
+      const res = await api.executeQuery(built.sql, true);
       const raw = res.data.rows[0]?.["QUERY PLAN"] as Array<{ Plan: PlanNode }> | undefined;
       if (!raw || !raw[0]?.Plan) throw new ApiError("Could not parse query plan", 500);
-      return { plan: raw[0].Plan, analyzed: analyze };
+      return { plan: raw[0].Plan, analyzed: built.analyzed };
     },
     onSuccess: ({ plan, analyzed }) => {
       setError(null);
@@ -115,7 +119,7 @@ export function QueryConsole({ schema, table }: { schema: string; table: string 
               {output.analyzed ? "EXPLAIN ANALYZE" : "EXPLAIN"}
             </Badge>
           </div>
-          <PlanViewer plan={output.plan} analyzed={output.analyzed} />
+          <PlanViewer plan={output.plan} analyzed={output.analyzed} schema={schema} />
         </Card>
       ) : null}
 

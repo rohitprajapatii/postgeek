@@ -2,12 +2,22 @@
 
 import { useState } from "react";
 import type { PlanNode } from "@/lib/api";
+import { analyzePlan, type PlanIssue } from "@/lib/advisor";
 import { Badge } from "@/components/ui/primitives";
-import { ChevronDown } from "lucide-react";
+import { FindingsList, SeveritySummary } from "./findings";
+import { CheckCircle2, ChevronDown, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatMs, formatNumber } from "@/lib/format";
 
-export function PlanViewer({ plan, analyzed }: { plan: PlanNode; analyzed: boolean }) {
+export function PlanViewer({
+  plan,
+  analyzed,
+  schema,
+}: {
+  plan: PlanNode;
+  analyzed: boolean;
+  schema?: string;
+}) {
   // Determine the most expensive node (by total cost) to highlight hotspots.
   let maxCost = 0;
   const walk = (n: PlanNode) => {
@@ -16,9 +26,50 @@ export function PlanViewer({ plan, analyzed }: { plan: PlanNode; analyzed: boole
   };
   walk(plan);
 
+  const issues = analyzePlan(plan, { analyzed, schema });
+  const byNode = new Map<string, PlanIssue[]>();
+  for (const issue of issues) {
+    const bucket = byNode.get(issue.nodePath);
+    if (bucket) bucket.push(issue);
+    else byNode.set(issue.nodePath, [issue]);
+  }
+
   return (
-    <div className="space-y-1.5">
-      <PlanNodeRow node={plan} depth={0} maxCost={maxCost} analyzed={analyzed} />
+    <div className="space-y-4">
+      {issues.length ? (
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <Lightbulb className="h-4 w-4 text-brand-600" />
+            <h4 className="text-sm font-semibold text-ink">
+              {issues.length} optimization {issues.length === 1 ? "finding" : "findings"}
+            </h4>
+            <SeveritySummary findings={issues} />
+          </div>
+          <FindingsList findings={issues} />
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50/60 px-3.5 py-2.5">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600" />
+          <p className="text-xs text-ink">
+            No problems detected in this plan — no large sequential scans, disk spills or
+            bad row estimates.
+          </p>
+        </div>
+      )}
+
+      <div>
+        <h4 className="mb-2 text-sm font-semibold text-ink">Plan tree</h4>
+        <div className="space-y-1.5">
+          <PlanNodeRow
+            node={plan}
+            depth={0}
+            path="0"
+            maxCost={maxCost}
+            analyzed={analyzed}
+            issuesByNode={byNode}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -26,19 +77,25 @@ export function PlanViewer({ plan, analyzed }: { plan: PlanNode; analyzed: boole
 function PlanNodeRow({
   node,
   depth,
+  path,
   maxCost,
   analyzed,
+  issuesByNode,
 }: {
   node: PlanNode;
   depth: number;
+  path: string;
   maxCost: number;
   analyzed: boolean;
+  issuesByNode: Map<string, PlanIssue[]>;
 }) {
   const [open, setOpen] = useState(true);
   const children = node.Plans ?? [];
   const cost = node["Total Cost"] ?? 0;
   const costPct = maxCost ? (cost / maxCost) * 100 : 0;
   const hot = costPct >= 80;
+  const nodeIssues = issuesByNode.get(path) ?? [];
+  const worst = nodeIssues[0]?.severity;
 
   const target =
     node["Relation Name"] || node["Index Name"]
@@ -52,7 +109,13 @@ function PlanNodeRow({
       <div
         className={cn(
           "rounded-xl border bg-white p-3 transition-colors",
-          hot ? "border-rose-200 bg-rose-50/40" : "border-slate-200",
+          worst === "critical"
+            ? "border-rose-300 bg-rose-50/50"
+            : worst === "warning"
+              ? "border-amber-300 bg-amber-50/40"
+              : hot
+                ? "border-rose-200 bg-rose-50/40"
+                : "border-slate-200",
         )}
         style={{ marginLeft: depth * 18 }}
       >
@@ -70,6 +133,14 @@ function PlanNodeRow({
                 <span className="text-sm font-semibold text-ink">{node["Node Type"]}</span>
                 {target ? <span className="font-mono text-xs text-brand-600">{target}</span> : null}
                 {hot ? <Badge tone="rose">hotspot</Badge> : null}
+                {nodeIssues.map((issue) => (
+                  <Badge
+                    key={issue.id}
+                    tone={issue.severity === "critical" ? "rose" : "amber"}
+                  >
+                    {issue.title}
+                  </Badge>
+                ))}
               </div>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-ink-muted">
                 <span>cost {formatNumber(node["Startup Cost"])}…{formatNumber(node["Total Cost"])}</span>
@@ -99,7 +170,14 @@ function PlanNodeRow({
       {open
         ? children.map((child, i) => (
             <div key={i} className="mt-1.5">
-              <PlanNodeRow node={child} depth={depth + 1} maxCost={maxCost} analyzed={analyzed} />
+              <PlanNodeRow
+                node={child}
+                depth={depth + 1}
+                path={`${path}.${i}`}
+                maxCost={maxCost}
+                analyzed={analyzed}
+                issuesByNode={issuesByNode}
+              />
             </div>
           ))
         : null}
